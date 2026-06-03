@@ -1,0 +1,19 @@
+{
+  "name": "aussie-ecolens-auth-proof",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal AWS Cognito to GCP Cloud Run protected endpoint proof.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/cognitoVerifier.js"
+  },
+  "dependencies": {
+    "aws-jwt-verify": "^5.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

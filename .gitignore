@@ -1,0 +1,52 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.firebaserc.example
+.firebaserc
+*.pem
+*.key
+*service-account*.json
+service-account.json
+tokens.txt
+*.token
+*.secret
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Generated outputs and local scratch
+.aws-sam/
+logs/
+*.log
+tmp/
+temp/
+.tmp/
+tmp-*
+dist/
+build/
+coverage/
+cropped_images/
+mg_detections.json
+
+# Large local coursework/model artifacts
+*.zip
+*.pt
+*.pth
+*.onnx
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

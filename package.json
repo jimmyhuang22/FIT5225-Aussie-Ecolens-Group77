@@ -1,0 +1,13 @@
+{
+  "name": "aussie-ecolens-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "web:install": "npm --prefix apps/web install",
+    "web:build": "npm --prefix apps/web run build",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:check": "npm --prefix apps/web run check",
+    "sam:validate": "sam validate --lint --template-file infra/aws-sam/template.yaml --region ap-southeast-2",
+    "sam:build": "sam build --template-file infra/aws-sam/template.yaml --use-container"
+  }
+}

@@ -1,0 +1,440 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Aussie EcoLens AWS serverless backend foundation.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        POWERTOOLS_SERVICE_NAME: aussie-ecolens
+
+Parameters:
+  AppName:
+    Type: String
+    Default: aussie-ecolens
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: Use lowercase letters, numbers, and hyphens only.
+  CognitoUserPoolName:
+    Type: String
+    Default: aussie-ecolens-users
+  CognitoCallbackUrl:
+    Type: String
+    Default: http://localhost:5173
+  CognitoLogoutUrl:
+    Type: String
+    Default: http://localhost:5173
+  AllowedCorsOrigin:
+    Type: String
+    Default: http://localhost:5173
+  InferenceEndpointUrl:
+    Type: String
+    Default: ""
+    Description: Cloud Run inference endpoint used by the processor after upload.
+  InferenceApiKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional shared API key sent to the inference endpoint.
+
+Resources:
+  PreSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../../services/aws-presignup/src/
+      Handler: app.handler
+      Timeout: 10
+      MemorySize: 128
+
+  PreSignUpInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PreSignUpFunction.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*"
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DependsOn:
+      - PreSignUpInvokePermission
+    Properties:
+      UserPoolName: !Ref CognitoUserPoolName
+      AutoVerifiedAttributes:
+        - email
+      LambdaConfig:
+        PreSignUp: !GetAtt PreSignUpFunction.Arn
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+        - Name: given_name
+          Required: false
+          Mutable: true
+        - Name: family_name
+          Required: false
+          Mutable: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${AppName}-web"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      ReadAttributes:
+        - email
+        - email_verified
+        - given_name
+        - family_name
+      WriteAttributes:
+        - email
+        - given_name
+        - family_name
+      CallbackURLs:
+        - !Ref CognitoCallbackUrl
+      LogoutURLs:
+        - !Ref CognitoLogoutUrl
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-${AWS::AccountId}-${AWS::Region}-media"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - HEAD
+            AllowedOrigins:
+              - !Ref AllowedCorsOrigin
+            MaxAge: 3000
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  MediaTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: mediaId
+          AttributeType: S
+        - AttributeName: ownerSub
+          AttributeType: S
+        - AttributeName: ownerChecksumKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: mediaId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ownerSub-createdAt-index
+          KeySchema:
+            - AttributeName: ownerSub
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ownerChecksumKey-index
+          KeySchema:
+            - AttributeName: ownerChecksumKey
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  SubscriptionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: subscriptionId
+          AttributeType: S
+        - AttributeName: ownerSub
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: subscriptionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ownerSub-createdAt-index
+          KeySchema:
+            - AttributeName: ownerSub
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: email-index
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  DedupTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ownerChecksumKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ownerChecksumKey
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Aussie EcoLens tag notifications
+
+  HttpApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: !Sub "'${AllowedCorsOrigin}'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../../services/aws-api/src/
+      Handler: app.handler
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          MEDIA_BUCKET: !Ref MediaBucket
+          MEDIA_TABLE: !Ref MediaTable
+          SUBSCRIPTION_TABLE: !Ref SubscriptionTable
+          DEDUP_TABLE: !Ref DedupTable
+          NOTIFICATION_TOPIC_ARN: !Ref NotificationTopic
+          CORS_ALLOWED_ORIGIN: !Ref AllowedCorsOrigin
+          PRESIGNED_URL_TTL_SECONDS: "900"
+          INFERENCE_ENDPOINT_URL: !Ref InferenceEndpointUrl
+          INFERENCE_API_KEY: !Ref InferenceApiKey
+      Policies:
+        - Statement:
+            Sid: ApiPresignUploads
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/uploads/*"
+        - Statement:
+            Sid: ApiReadAndDeleteMediaObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:DeleteObject
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/uploads/*"
+              - !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/thumbnails/*"
+        - Statement:
+            Sid: ApiMediaTableItems
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt MediaTable.Arn
+        - Statement:
+            Sid: ApiMediaTableIndexes
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt MediaTable.Arn
+              - !Sub "${MediaTable.Arn}/index/ownerSub-createdAt-index"
+              - !Sub "${MediaTable.Arn}/index/ownerChecksumKey-index"
+        - Statement:
+            Sid: ApiSubscriptionTableItems
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt SubscriptionTable.Arn
+        - Statement:
+            Sid: ApiSubscriptionTableIndexes
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt SubscriptionTable.Arn
+              - !Sub "${SubscriptionTable.Arn}/index/ownerSub-createdAt-index"
+              - !Sub "${SubscriptionTable.Arn}/index/email-index"
+        - Statement:
+            Sid: ApiDedupTableItems
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+            Resource: !GetAtt DedupTable.Arn
+        - Statement:
+            Sid: ApiCreateEmailSubscriptions
+            Effect: Allow
+            Action:
+              - sns:Subscribe
+            Resource: !Ref NotificationTopic
+            Condition:
+              StringEquals:
+                "sns:Protocol": email
+        - Statement:
+            Sid: ApiListTopicSubscriptions
+            Effect: Allow
+            Action:
+              - sns:ListSubscriptionsByTopic
+            Resource: !Ref NotificationTopic
+        - Statement:
+            Sid: ApiPublishManualTagNotifications
+            Effect: Allow
+            Action:
+              - sns:Publish
+            Resource: !Ref NotificationTopic
+        - Statement:
+            Sid: ApiManageSubscriptionAttributes
+            Effect: Allow
+            Action:
+              - sns:Unsubscribe
+              - sns:SetSubscriptionAttributes
+            # SNS subscription attribute APIs do not support topic-level
+            # resource scoping for every operation. Keep this only on the API
+            # Lambda; the processor has publish-only SNS access.
+            Resource: "*"
+      Events:
+        Root:
+          Type: Api
+          Properties:
+            RestApiId: !Ref HttpApi
+            Path: /
+            Method: ANY
+        Proxy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+  ProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../../services/aws-processor/src/
+      Handler: handler.handler
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          MEDIA_BUCKET: !Ref MediaBucket
+          MEDIA_TABLE: !Ref MediaTable
+          DEDUP_TABLE: !Ref DedupTable
+          NOTIFICATION_TOPIC_ARN: !Ref NotificationTopic
+          INFERENCE_ENDPOINT_URL: !Ref InferenceEndpointUrl
+          INFERENCE_API_KEY: !Ref InferenceApiKey
+          INFERENCE_TOP_K: "3"
+          INFERENCE_TIMEOUT_SECONDS: "90"
+          VIDEO_FRAME_RATE: "1"
+      Policies:
+        - Statement:
+            Sid: ProcessorReadMediaObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/uploads/*"
+              - !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/thumbnails/*"
+        - Statement:
+            Sid: ProcessorWriteThumbnails
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/thumbnails/*"
+        - Statement:
+            Sid: ProcessorMediaTableItems
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt MediaTable.Arn
+        - Statement:
+            Sid: ProcessorUpdateDedupStatus
+            Effect: Allow
+            Action:
+              - dynamodb:UpdateItem
+            Resource: !GetAtt DedupTable.Arn
+        - Statement:
+            Sid: ProcessorPublishTagNotifications
+            Effect: Allow
+            Action:
+              - sns:Publish
+            Resource: !Ref NotificationTopic
+      Events:
+        UploadedObject:
+          Type: S3
+          Properties:
+            Bucket: !Ref MediaBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: uploads/
+
+Outputs:
+  ApiBaseUrl:
+    Description: Protected API base URL.
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  CognitoUserPoolId:
+    Description: Cognito user pool ID for the frontend.
+    Value: !Ref UserPool
+  CognitoUserPoolClientId:
+    Description: Cognito app client ID for the frontend.
+    Value: !Ref UserPoolClient
+  MediaBucketName:
+    Description: Private S3 bucket for uploaded media.
+    Value: !Ref MediaBucket
+  MediaTableName:
+    Description: DynamoDB table storing media metadata.
+    Value: !Ref MediaTable
+  SubscriptionTableName:
+    Description: DynamoDB table storing tag subscriptions.
+    Value: !Ref SubscriptionTable
+  DedupTableName:
+    Description: DynamoDB table storing owner-scoped checksum reservations.
+    Value: !Ref DedupTable
+  NotificationTopicArn:
+    Description: SNS topic used by the API and processor.
+    Value: !Ref NotificationTopic

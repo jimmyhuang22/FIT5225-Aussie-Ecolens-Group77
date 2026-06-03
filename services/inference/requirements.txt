@@ -1,0 +1,17 @@
+# Aussie EcoLens inference service runtime deps.
+# Install with the PyTorch CPU index so torch wheels do NOT pull CUDA libs:
+#   pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+#
+# The Dockerfile passes --extra-index-url; for local dev use the same flag.
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.8,<3.0
+pillow>=10.0,<12.0
+numpy>=1.26,<3.0
+torch==2.4.1+cpu
+torchvision==0.19.1+cpu
+megadetector>=5.0.0
+google-cloud-storage>=2.16,<4.0
+httpx>=0.27,<1.0
+python-multipart>=0.0.9

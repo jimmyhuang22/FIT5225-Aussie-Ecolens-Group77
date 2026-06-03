@@ -1,0 +1,36 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local secrets and env
+.env
+.env.local
+.env.*.local
+
+# Local scratch
+/tmp/
+cropped_images/
+mg_detections.json
+evidence/
+
+# Model artifacts — must come from GCS or AussieEcoLense/, never tracked
+*.pt
+*.pth
+*.onnx
+
+# Build output
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

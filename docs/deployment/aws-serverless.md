@@ -1,144 +1,203 @@
-# AWS Serverless Deployment Foundation
+# AWS Serverless Deployment
 
-This guide documents the AWS foundation created for Aussie EcoLens. It covers
-the infrastructure boundary only; the media API and processor business logic are
-implemented by later workstreams.
+This deployment makes AWS the main serverless runtime:
 
-## Stack Contents
+- Cognito: sign-up, sign-in, JWT authorizer.
+- API Gateway: protected REST API.
+- Lambda: media API and upload processor.
+- S3: private original media storage.
+- DynamoDB: media metadata and tag subscriptions.
+- SNS: tag notification event topic.
 
-The SAM template at `infra/aws-sam/template.yaml` creates:
-
-- Cognito User Pool and public web app client
-- Cognito PreSignUp Lambda for required `email`, `given_name`, and `family_name`
-- API Gateway REST API protected by a Cognito authorizer
-- API Lambda foundation handler
-- S3 media bucket with upload CORS rules and public access blocked
-- DynamoDB media, subscription, and deduplication tables
-- SNS topic for tag-match email notifications
-- Processor Lambda wired to S3 `uploads/` object-created events
+The deployed stack should set `InferenceEndpointUrl` to the Cloud Run inference
+service. The processor fails closed when this endpoint is missing. Filename-based
+demo tagging is disabled by default and requires explicitly setting
+`ALLOW_DEMO_FALLBACK=true` in the processor environment for local walkthroughs.
 
 ## Prerequisites
 
-- AWS CLI v2 configured for the target account
+Install and configure:
+
+- AWS CLI v2
 - AWS SAM CLI
-- Docker, if building with `sam build --use-container`
-- Permission to create or update Cognito, Lambda, API Gateway, S3, DynamoDB, SNS,
-  IAM roles, and CloudFormation resources
+- Node.js 20+ for the web app
+- An AWS account and region, for example `ap-southeast-2`
 
-## Validate
+Login:
 
-```bash
-npm run sam:validate
+```powershell
+aws configure
+aws sts get-caller-identity
 ```
 
-Equivalent direct command:
+## Deploy The Backend
 
-```bash
-sam validate --lint \
-  --template-file infra/aws-sam/template.yaml \
-  --region ap-southeast-2
+From the repository root:
+
+```powershell
+sam build --template-file infra/aws-sam/template.yaml --use-container
+sam deploy --guided --template-file infra/aws-sam/template.yaml --stack-name aussie-ecolens-dev
 ```
 
-## Build
+Recommended guided values:
 
-```bash
-npm run sam:build
-```
+- AWS Region: `ap-southeast-2`
+- `AppName`: `aussie-ecolens`
+- `AllowedCorsOrigin`: `http://localhost:5173`
+- `CognitoCallbackUrl`: `http://localhost:5173`
+- `CognitoLogoutUrl`: `http://localhost:5173`
+- `InferenceEndpointUrl`: leave blank for first demo, or set your deployed inference URL
+- `InferenceApiKeyParameterName`: preferred for deployed environments; set this
+  to an SSM SecureString parameter such as `/aussie-ecolens/dev/inference-api-key`
+- `InferenceApiKey`: legacy fallback; leave blank when using
+  `InferenceApiKeyParameterName`
+- Confirm changes before deploy: `Y`
+- Allow SAM CLI IAM role creation: `Y`
+- Save arguments to configuration file: `Y`
 
-Equivalent direct command:
+After deploy, copy these stack outputs:
 
-```bash
-sam build \
-  --template-file infra/aws-sam/template.yaml \
-  --use-container
-```
+- `ApiBaseUrl`
+- `CognitoUserPoolId`
+- `CognitoUserPoolClientId`
+- `MediaBucketName`
+- `NotificationTopicArn`
 
-## Deploy
+You can print them later:
 
-```bash
-sam deploy \
-  --template-file .aws-sam/build/template.yaml \
-  --stack-name aussie-ecolens-dev \
-  --region ap-southeast-2 \
-  --capabilities CAPABILITY_IAM \
-  --resolve-s3 \
-  --parameter-overrides \
-    AppName=aussie-ecolens \
-    CognitoUserPoolName=aussie-ecolens-users \
-    CognitoCallbackUrl=http://localhost:5173 \
-    CognitoLogoutUrl=http://localhost:5173 \
-    AllowedCorsOrigin=http://localhost:5173
-```
-
-When the Cloud Run inference service is available, add:
-
-```bash
-InferenceEndpointUrl=https://<cloud-run-service-url>
-InferenceApiKey=<redacted>
-```
-
-Do not commit real API keys or copy them into screenshots.
-
-## Outputs To Share With Frontend
-
-After deployment, read stack outputs:
-
-```bash
-aws cloudformation describe-stacks \
-  --stack-name aussie-ecolens-dev \
-  --region ap-southeast-2 \
+```powershell
+aws cloudformation describe-stacks `
+  --stack-name aussie-ecolens-dev `
   --query "Stacks[0].Outputs"
 ```
 
-The frontend needs:
+## Configure The Web App
 
-- `ApiBaseUrl` -> `VITE_API_BASE_URL`
-- `CognitoUserPoolId` -> `VITE_COGNITO_USER_POOL_ID`
-- `CognitoUserPoolClientId` -> `VITE_COGNITO_APP_CLIENT_ID`
-- AWS region -> `VITE_COGNITO_REGION`
+Create `apps/web/.env`:
 
-## Foundation Smoke Checks
-
-The API foundation handler currently exposes a minimal authenticated root route.
-After deployment and sign-in, call:
-
-```bash
-curl -H "Authorization: Bearer <cognito-id-token>" \
-  "$ApiBaseUrl/"
+```text
+VITE_COGNITO_REGION=ap-southeast-2
+VITE_COGNITO_USER_POOL_ID=<CognitoUserPoolId>
+VITE_COGNITO_APP_CLIENT_ID=<CognitoUserPoolClientId>
+VITE_API_BASE_URL=<ApiBaseUrl>
 ```
 
-Expected response:
+Run locally:
+
+```powershell
+Set-Location apps/web
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`, sign up, confirm the email code, then sign in.
+
+## Smoke Test The API
+
+Use the frontend sign-in flow to obtain a Cognito ID token, or use a REST
+client after login. The API Gateway REST Cognito authorizer expects the ID token
+for these protected routes.
+
+Create an upload URL:
+
+```powershell
+$token = "<Cognito ID token>"
+$api = "<ApiBaseUrl>"
+$file = "test_images/Alectura_lathami_1.JPG"
+$checksum = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLower()
+$body = @{
+  filename = "Alectura_lathami_1.JPG"
+  contentType = "image/jpeg"
+  mediaType = "image"
+  checksumSha256 = $checksum
+} | ConvertTo-Json
+
+$upload = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$api/media/upload-url" `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+Upload a file to the returned S3 URL:
+
+```powershell
+Invoke-RestMethod `
+  -Method Put `
+  -Uri $upload.uploadUrl `
+  -Headers @{
+    "Content-Type" = $upload.uploadHeaders.'Content-Type'
+    "x-amz-meta-checksum-sha256" = $upload.uploadHeaders.'x-amz-meta-checksum-sha256'
+  } `
+  -InFile $file
+```
+
+Wait a few seconds for the S3-triggered processor, then query media:
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "$api/media?tag=Alectura_lathami" `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+## Connect Real Inference
+
+Deploy the existing `services/inference` container, then redeploy this SAM stack
+with:
+
+```powershell
+sam deploy `
+  --template-file infra/aws-sam/template.yaml `
+  --stack-name aussie-ecolens-dev `
+  --parameter-overrides `
+    InferenceEndpointUrl=https://<your-inference-service-url> `
+    InferenceApiKeyParameterName=/aussie-ecolens/dev/inference-api-key
+```
+
+Create the SSM parameter before deploying:
+
+```powershell
+aws ssm put-parameter `
+  --name /aussie-ecolens/dev/inference-api-key `
+  --type SecureString `
+  --value "<same-key-as-cloud-run>" `
+  --overwrite
+```
+
+The legacy `InferenceApiKey` parameter is marked `NoEcho`, but SSM SecureString
+is preferred. Do not paste the real value into screenshots, commit messages,
+reports, or shared chat.
+
+The inference endpoint must accept:
 
 ```json
 {
-  "service": "aws-api",
-  "status": "foundation_ready"
+  "image": {
+    "url": "https://presigned-s3-get-url"
+  },
+  "top_k": 3
 }
 ```
 
-The processor foundation handler is wired to S3 object-created events under
-`uploads/`. Later commits replace the placeholder response with checksum,
-thumbnail, inference, metadata, and notification processing.
+and return the response shape documented in `docs/contracts/api-contract.md`.
+When Cloud Run is deployed in `api_key` mode, the AWS processor sends
+`X-Inference-Api-Key` on each request.
 
-## IAM Notes
+## Evidence To Capture
 
-Lambda permissions are split by responsibility:
+- Cognito user pool and app client screenshots.
+- Successful sign-up/sign-in frontend screenshots.
+- API Gateway stage URL screenshot.
+- S3 bucket object after upload.
+- Lambda processor CloudWatch log showing the `mediaId`.
+- DynamoDB media record with `tags` and `tagCounts`.
+- Query response showing tag-based retrieval.
+- SNS topic screenshot or published message evidence.
 
-- API Lambda can presign uploads, read/delete owned media objects, query/update
-  DynamoDB tables and indexes, and manage SNS email subscriptions.
-- Processor Lambda can read uploaded media, write thumbnails, update media and
-  dedup records, and publish SNS notifications.
+## Clean Up
 
-The processor does not manage SNS subscriptions. The API Lambda retains
-`Resource: "*"` only for SNS subscription attribute operations where AWS does
-not consistently support topic-level resource scoping.
-
-## Local-Only Files
-
-Do not commit:
-
-- `.aws-sam/`
-- `.env` or real deployment parameter files
-- AWS credentials or session tokens
-- generated logs and screenshots containing account IDs or secrets without
-  redaction
+```powershell
+sam delete --stack-name aussie-ecolens-dev
+```

@@ -27,6 +27,11 @@ serves model-backed `/inference` responses. If model paths are missing or fail
 to load, `/health` still responds with `models_loaded=false` and `/inference`
 returns `503 models_not_loaded`.
 
+In deployed `api_key` mode, `/inference` requires `X-Inference-Api-Key`.
+`local_path` inputs are accepted only when `INFERENCE_AUTH_MODE=open`. URL image
+sources must use HTTPS and match the default AWS S3 host allowlist or
+`INFERENCE_ALLOWED_IMAGE_URL_HOSTS`.
+
 ## Local Development
 
 Create a local environment file:

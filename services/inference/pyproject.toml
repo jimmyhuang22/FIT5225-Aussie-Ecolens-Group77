@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aussie-ecolens-inference"
+version = "0.1.0"
+description = "Cloud Run inference service for Aussie EcoLens"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Assignment-internal" }
+authors = [{ name = "FIT5225 Aussie EcoLens team" }]
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.30,<1.0",
+  "pydantic>=2.8,<3.0",
+  "pillow>=10.0,<12.0",
+  "numpy>=1.26,<3.0",
+  "torch==2.4.1+cpu",
+  "torchvision==0.19.1+cpu",
+  "megadetector>=5.0.0",
+  "google-cloud-storage>=2.16,<4.0",
+  "httpx>=0.27,<1.0",
+  "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "httpx>=0.27",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -14,6 +14,13 @@ The request and response schemas are defined in
 (`gcs_uri`, `url`, `base64`, or `local_path`) and returns
 `503 models_not_loaded` until model loading is added in later commits.
 
+The model layer is split into:
+
+- `src/inference/gcs.py` for GCS URI resolution and downloads
+- `src/inference/labels.py` for parsing the semicolon-delimited labels file
+- `src/inference/models.py` for MegaDetector and SpeciesNet loading plus
+  per-image inference helpers
+
 ## Local Development
 
 Create a local environment file:

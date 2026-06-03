@@ -6,6 +6,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from . import __version__
+from .config import ConfigError, load_config
+from .schemas import HealthResponse, InferenceRequest
 
 
 app = FastAPI(
@@ -14,19 +16,21 @@ app = FastAPI(
 )
 
 
-@app.get("/health")
-async def health() -> dict[str, object]:
-    return {
-        "ok": True,
-        "service": "inference",
-        "models_loaded": False,
-        "auth_mode": os.environ.get("INFERENCE_AUTH_MODE", "open"),
-        "version": __version__,
-    }
+@app.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    try:
+        config = load_config(allow_missing_required=True)
+    except ConfigError:
+        config = None
+    return HealthResponse(
+        models_loaded=False,
+        auth_mode=config.auth_mode if config else os.environ.get("INFERENCE_AUTH_MODE", "iam"),
+        version=__version__,
+    )
 
 
 @app.post("/inference")
-async def inference() -> JSONResponse:
+async def inference(_payload: InferenceRequest) -> JSONResponse:
     raise HTTPException(status_code=503, detail="models_not_loaded")
 
 

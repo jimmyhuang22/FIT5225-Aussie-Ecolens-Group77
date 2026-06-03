@@ -9,8 +9,10 @@ The initial scaffold exposes:
 - `GET /health`
 - `POST /inference`
 
-`POST /inference` returns `503 models_not_loaded` until model configuration and
-loading are added in later commits.
+The request and response schemas are defined in
+`src/inference/schemas.py`. `POST /inference` accepts exactly one image source
+(`gcs_uri`, `url`, `base64`, or `local_path`) and returns
+`503 models_not_loaded` until model loading is added in later commits.
 
 ## Local Development
 

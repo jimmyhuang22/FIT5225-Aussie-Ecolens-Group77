@@ -247,12 +247,93 @@ Resources:
           INFERENCE_API_KEY: !Ref InferenceApiKey
       Policies:
         - Statement:
-            Sid: ApiFoundationAccess
+            Sid: ApiPresignUploads
             Effect: Allow
             Action:
-              - s3:*
-              - dynamodb:*
-              - sns:*
+              - s3:PutObject
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/uploads/*"
+        - Statement:
+            Sid: ApiReadAndDeleteMediaObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:DeleteObject
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/uploads/*"
+              - !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/thumbnails/*"
+        - Statement:
+            Sid: ApiMediaTableItems
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt MediaTable.Arn
+        - Statement:
+            Sid: ApiMediaTableIndexes
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt MediaTable.Arn
+              - !Sub "${MediaTable.Arn}/index/ownerSub-createdAt-index"
+              - !Sub "${MediaTable.Arn}/index/ownerChecksumKey-index"
+        - Statement:
+            Sid: ApiSubscriptionTableItems
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt SubscriptionTable.Arn
+        - Statement:
+            Sid: ApiSubscriptionTableIndexes
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt SubscriptionTable.Arn
+              - !Sub "${SubscriptionTable.Arn}/index/ownerSub-createdAt-index"
+              - !Sub "${SubscriptionTable.Arn}/index/email-index"
+        - Statement:
+            Sid: ApiDedupTableItems
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+            Resource: !GetAtt DedupTable.Arn
+        - Statement:
+            Sid: ApiCreateEmailSubscriptions
+            Effect: Allow
+            Action:
+              - sns:Subscribe
+            Resource: !Ref NotificationTopic
+            Condition:
+              StringEquals:
+                "sns:Protocol": email
+        - Statement:
+            Sid: ApiListTopicSubscriptions
+            Effect: Allow
+            Action:
+              - sns:ListSubscriptionsByTopic
+            Resource: !Ref NotificationTopic
+        - Statement:
+            Sid: ApiPublishManualTagNotifications
+            Effect: Allow
+            Action:
+              - sns:Publish
+            Resource: !Ref NotificationTopic
+        - Statement:
+            Sid: ApiManageSubscriptionAttributes
+            Effect: Allow
+            Action:
+              - sns:Unsubscribe
+              - sns:SetSubscriptionAttributes
+            # SNS subscription attribute APIs do not support topic-level
+            # resource scoping for every operation. Keep this only on the API
+            # Lambda; the processor has publish-only SNS access.
             Resource: "*"
       Events:
         Root:
@@ -288,13 +369,38 @@ Resources:
           VIDEO_FRAME_RATE: "1"
       Policies:
         - Statement:
-            Sid: ProcessorFoundationAccess
+            Sid: ProcessorReadMediaObjects
             Effect: Allow
             Action:
-              - s3:*
-              - dynamodb:*
-              - sns:*
-            Resource: "*"
+              - s3:GetObject
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/uploads/*"
+              - !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/thumbnails/*"
+        - Statement:
+            Sid: ProcessorWriteThumbnails
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${AppName}-${AWS::AccountId}-${AWS::Region}-media/thumbnails/*"
+        - Statement:
+            Sid: ProcessorMediaTableItems
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt MediaTable.Arn
+        - Statement:
+            Sid: ProcessorUpdateDedupStatus
+            Effect: Allow
+            Action:
+              - dynamodb:UpdateItem
+            Resource: !GetAtt DedupTable.Arn
+        - Statement:
+            Sid: ProcessorPublishTagNotifications
+            Effect: Allow
+            Action:
+              - sns:Publish
+            Resource: !Ref NotificationTopic
       Events:
         UploadedObject:
           Type: S3

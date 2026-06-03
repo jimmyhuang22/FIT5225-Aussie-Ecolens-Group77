@@ -21,6 +21,12 @@ The model layer is split into:
 - `src/inference/models.py` for MegaDetector and SpeciesNet loading plus
   per-image inference helpers
 
+When all required model environment variables are present, the app downloads any
+`gs://` model assets at startup, loads MegaDetector and SpeciesNet once, and
+serves model-backed `/inference` responses. If model paths are missing or fail
+to load, `/health` still responds with `models_loaded=false` and `/inference`
+returns `503 models_not_loaded`.
+
 ## Local Development
 
 Create a local environment file:

@@ -1,0 +1,53 @@
+# Inference Service
+
+This service is the GCP Cloud Run runtime for Aussie EcoLens model inference.
+It will host the MegaDetector + SpeciesNet pipeline used by the AWS processor
+Lambda and query-by-file API.
+
+The initial scaffold exposes:
+
+- `GET /health`
+- `POST /inference`
+
+`POST /inference` returns `503 models_not_loaded` until model configuration and
+loading are added in later commits.
+
+## Local Development
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Install dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Run the service:
+
+```bash
+PYTHONPATH=src uvicorn inference.main:app --reload --host 0.0.0.0 --port 8080
+```
+
+Open:
+
+```text
+http://localhost:8080/health
+```
+
+## Container
+
+Build from this directory:
+
+```bash
+docker build -t aussie-ecolens-inference .
+```
+
+Run:
+
+```bash
+docker run --rm -p 8080:8080 aussie-ecolens-inference
+```

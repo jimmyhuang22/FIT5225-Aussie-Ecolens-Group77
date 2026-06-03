@@ -4,20 +4,22 @@ This repository contains the Aussie EcoLens FIT5225 Assignment 2 multi-cloud
 serverless wildlife media platform. The layout below is the intended project
 structure for implementation and handoff between team members.
 
-## Planned Structure
+## Current And Planned Structure
 
 | Path | Purpose |
 |---|---|
 | `README.md` | Project overview and current setup notes |
 | `package.json` | Root workspace scripts for frontend and AWS SAM workflows |
+| `docs/repo-structure.md` | Repository layout and commit handoff rules |
+| `docs/architecture/service-map.md` | Multi-cloud service boundary and runtime responsibility map |
+| `docs/contracts/env-contract.md` | Shared environment variable and secret-handling contract |
 | `apps/web/` | React/Vite frontend for auth, media upload, queries, tag edits, delete, and subscriptions |
 | `infra/aws-sam/` | AWS SAM template for Cognito, API Gateway, Lambda, S3, DynamoDB, and SNS |
 | `services/aws-api/` | Protected AWS API Lambda for upload URLs, media queries, tag edits, delete, and subscriptions |
 | `services/aws-presignup/` | Cognito PreSignUp trigger for required profile attributes |
 | `services/aws-processor/` | S3 event processor Lambda for checksums, thumbnails, inference calls, video frames, and SNS publish |
 | `services/inference/` | FastAPI Cloud Run service for MegaDetector and SpeciesNet inference |
-| `docs/architecture/` | Architecture and cloud responsibility notes |
-| `docs/contracts/` | API, metadata, and environment contracts |
+| `docs/contracts/` | API, metadata, and other shared contracts |
 | `docs/deployment/` | AWS and GCP deployment guides |
 | `docs/evidence/` | Demo and marking evidence checklists |
 

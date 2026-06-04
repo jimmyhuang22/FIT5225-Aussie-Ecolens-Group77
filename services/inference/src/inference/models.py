@@ -128,10 +128,15 @@ def _run_megadetector(detector: Any, image_path: str) -> list[dict[str, Any]]:
     documented entry points in order.
     """
 
-    # Preferred: detector exposes ``generate_detections_one_image(image)``.
+    # Preferred: pass image_path as image_id so MegaDetector output keeps a
+    # useful ``file`` field. Older releases also support a one-argument form.
     if hasattr(detector, "generate_detections_one_image"):
         with Image.open(image_path) as img:
-            result = detector.generate_detections_one_image(img.convert("RGB"))
+            rgb = img.convert("RGB")
+            try:
+                result = detector.generate_detections_one_image(rgb, image_path)
+            except TypeError:
+                result = detector.generate_detections_one_image(rgb)
         return result.get("detections", []) if isinstance(result, dict) else []
 
     # Fallback: high-level batch helper for a single file.

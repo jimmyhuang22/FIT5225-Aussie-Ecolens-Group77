@@ -27,7 +27,12 @@ def parse_gcs_uri(uri: str) -> tuple[str, str]:
 
 
 def download_if_gcs(uri_or_path: str, dest_dir: str | Path) -> str:
-    """Resolve a local path or download a gs:// URI into ``dest_dir``."""
+    """If ``uri_or_path`` is a gs:// URI, download to ``dest_dir`` and return the
+    local path. Otherwise return ``uri_or_path`` unchanged.
+
+    The Google Cloud Storage client is imported lazily so unit tests that never
+    touch GCS don't need the dependency wired up.
+    """
 
     if not is_gcs_uri(uri_or_path):
         return uri_or_path
@@ -37,6 +42,8 @@ def download_if_gcs(uri_or_path: str, dest_dir: str | Path) -> str:
     dest.mkdir(parents=True, exist_ok=True)
     local_path = dest / Path(key).name
 
+    # Lazy import: keeps unit tests that never download anything fast and avoids
+    # a hard dependency on Application Default Credentials being present in dev.
     from google.cloud import storage  # type: ignore import-untyped
 
     LOG.info("Downloading %s to %s", uri_or_path, local_path)

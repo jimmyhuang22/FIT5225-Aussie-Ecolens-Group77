@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aussie-ecolens-inference"
 version = "0.1.0"
-description = "Cloud Run inference service for Aussie EcoLens"
+description = "Phase 3 ML inference service: MegaDetector + fine-tuned SpeciesNet on Cloud Run"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Assignment-internal" }

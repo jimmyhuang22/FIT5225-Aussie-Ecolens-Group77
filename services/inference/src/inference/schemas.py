@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -25,10 +24,7 @@ class InferenceImage(BaseModel):
     )
     local_path: str | None = Field(
         default=None,
-        description=(
-            "Filesystem path inside the container. ONLY honored when "
-            "INFERENCE_AUTH_MODE=open."
-        ),
+        description="Filesystem path inside the container. ONLY honored when INFERENCE_AUTH_MODE=open.",
     )
 
     @field_validator("gcs_uri")

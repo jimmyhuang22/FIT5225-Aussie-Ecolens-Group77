@@ -73,6 +73,7 @@ cat <<BANNER
 ============================================================
 BANNER
 
+# Create bucket if missing
 if ! gcloud storage buckets describe "gs://${BUCKET}" --project="${PROJECT}" >/dev/null 2>&1; then
   echo "Bucket gs://${BUCKET} does not exist. Creating..."
   set -x

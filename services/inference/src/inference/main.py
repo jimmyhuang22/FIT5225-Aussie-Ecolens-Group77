@@ -1,8 +1,24 @@
 """FastAPI app for the Aussie EcoLens ML inference service.
 
-The deployed Cloud Run service is reachable by AWS Lambda and protects
-`/inference` with `INFERENCE_AUTH_MODE=api_key` plus `X-Inference-Api-Key`.
-Local development can set `INFERENCE_AUTH_MODE=open`.
+Lifespan:
+    On startup, read config; if all required env vars are present, download
+    GCS-hosted model artifacts to ``/tmp/models``, parse labels, load
+    MegaDetector + SpeciesNet, and flip ``models_loaded`` to True.
+
+    If required env vars are missing, the app still starts (so /health works)
+    but /inference returns 503.
+
+Routes:
+    GET  /health      always 200; tells the caller whether models are loaded.
+    POST /inference   503 until models are loaded; otherwise runs MD + SpeciesNet
+                      and returns the InferenceResponse shape locked in the API
+                      contract.
+
+Auth posture:
+    The deployed Cloud Run service is reachable by AWS Lambda and protects
+    /inference with INFERENCE_AUTH_MODE=api_key plus X-Inference-Api-Key. The
+    container does NOT validate Cognito JWTs itself. Local dev sets
+    INFERENCE_AUTH_MODE=open to bypass application-level auth.
 """
 
 from __future__ import annotations
@@ -29,7 +45,12 @@ from . import __version__
 from .config import ConfigError, InferenceConfig, load_config
 from .gcs import download_if_gcs, is_gcs_uri
 from .labels import parse_labels
-from .models import LoadedModels, infer_one_image, load_megadetector, load_speciesnet
+from .models import (
+    LoadedModels,
+    infer_one_image,
+    load_megadetector,
+    load_speciesnet,
+)
 from .schemas import (
     HealthResponse,
     InferenceImage,
@@ -39,8 +60,8 @@ from .schemas import (
 
 LOG = logging.getLogger(__name__)
 
-_MAX_BASE64_BYTES = 10 * 1024 * 1024
-_MAX_URL_BYTES = 25 * 1024 * 1024
+_MAX_BASE64_BYTES = 10 * 1024 * 1024  # 10 MB decoded
+_MAX_URL_BYTES = 25 * 1024 * 1024  # 25 MB downloaded
 _MODEL_DOWNLOAD_DIR = Path("/tmp/aussie-ecolens-models")
 _DEFAULT_ALLOWED_IMAGE_URL_HOSTS = (
     "s3.amazonaws.com",
@@ -99,7 +120,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     if config.auth_mode == "open":
         LOG.warning(
-            "INFERENCE_AUTH_MODE=open: no authentication. Local development only; never deploy with this."
+            "INFERENCE_AUTH_MODE=open: no authentication. Local development only — never deploy with this."
         )
     elif config.auth_mode == "api_key" and not config.inference_api_key:
         LOG.error("INFERENCE_AUTH_MODE=api_key requires INFERENCE_API_KEY.")
@@ -113,7 +134,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     try:
         loaded = _load_all(config)
-    except Exception:
+    except Exception:  # noqa: BLE001 — log + degrade gracefully
         LOG.exception("Failed to load models; /inference will return 503.")
         app.state.loaded = None
         app.state.models_loaded = False
@@ -143,11 +164,12 @@ async def health(request: Request) -> HealthResponse:
     return HealthResponse(
         models_loaded=bool(getattr(request.app.state, "models_loaded", False)),
         auth_mode=auth_mode,
-        version=__version__,
     )
 
 
 def _require_inference_auth(request: Request, config: InferenceConfig) -> None:
+    """Validate app-level auth for modes Cloud Run cannot enforce itself."""
+
     if config.auth_mode in ("open", "iam"):
         return
 
@@ -267,7 +289,7 @@ async def inference(request: Request, payload: InferenceRequest) -> InferenceRes
         )
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         LOG.exception("Inference failed for %s", resolved.path)
         raise HTTPException(status_code=500, detail=f"inference_failed: {exc}") from exc
     finally:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import importlib
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    # Force load_config(allow_missing_required=True) into the "no config" branch
+    # so the test client boots cleanly without real model files.
     for key in (
         "MODEL_PATH_MD",
         "MODEL_PATH_SPECIES",
@@ -19,6 +21,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("LOG_LEVEL", "WARNING")
+
+    # Re-import so the @app.lifespan picks up the cleared env.
+    import importlib
 
     import inference.main as main_module
 
@@ -50,4 +55,5 @@ def test_inference_rejects_zero_image_sources(client: TestClient) -> None:
         "/inference",
         json={"image": {}, "top_k": 1},
     )
+    # 422 because Pydantic rejects the request body before the route runs.
     assert resp.status_code == 422

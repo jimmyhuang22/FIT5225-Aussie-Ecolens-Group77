@@ -1,9 +1,12 @@
 """Parse the semicolon-delimited labels.txt into an ordered list of LabelEntry.
 
-File schema:
+File schema (one row per species):
     taxon_id;class;order;family;genus;species_epithet;common_name
 
-The row order must match the SpeciesNet model's output class order.
+The row order MUST match the SpeciesNet model's output class order. The reference
+implementation (``AussieEcoLense/batch.py``) hardcodes a Python list of species
+keys in the same order. This parser reproduces that order by yielding entries in
+file order.
 """
 
 from __future__ import annotations
@@ -14,7 +17,13 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class LabelEntry:
-    """One species row from labels.txt."""
+    """One species row.
+
+    ``species_key`` is the title-cased ``Genus_species`` form used by
+    ``AussieEcoLense/batch.py`` (e.g. ``Bos_taurus``). Genus-only rows such as
+    ``rattus;;`` become ``Rattus``. The key is the canonical species identifier
+    stored on ``media_items.tags`` per the Phase 1 metadata schema.
+    """
 
     taxon_id: str
     class_: str
@@ -37,7 +46,11 @@ class LabelParseError(RuntimeError):
 
 
 def parse_labels(path: str | Path) -> list[LabelEntry]:
-    """Read ``path`` and return labels in file order."""
+    """Read ``path`` and return labels in file order.
+
+    Lines that are blank or start with ``#`` are skipped. Every kept line must
+    have exactly seven semicolon-delimited fields.
+    """
 
     src = Path(path)
     if not src.is_file():

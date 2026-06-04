@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Final
 from typing import Literal
+from typing import Final
 
 REQUIRED_VARS: Final[tuple[str, ...]] = (
     "MODEL_PATH_MD",
@@ -64,9 +64,7 @@ def _coerce_float(name: str, raw: str) -> float:
         raise ConfigError(f"{name} must be a float; got {raw!r}") from exc
 
 
-def _coerce_int(
-    name: str, raw: str, *, minimum: int | None = None, maximum: int | None = None
-) -> int:
+def _coerce_int(name: str, raw: str, *, minimum: int | None = None, maximum: int | None = None) -> int:
     try:
         value = int(raw)
     except ValueError as exc:
@@ -81,9 +79,10 @@ def _coerce_int(
 def load_config(*, allow_missing_required: bool = False) -> InferenceConfig | None:
     """Read config from os.environ.
 
-    When ``allow_missing_required`` is True, missing required vars do NOT raise;
-    instead, ``None`` is returned. This lets the FastAPI app boot and serve
-    ``/health`` while model paths are not configured.
+    When ``allow_missing_required`` is True, missing required vars do NOT raise —
+    instead, ``None`` is returned. This is used by ``main.py`` so that the FastAPI
+    app can still boot and serve ``/health`` (with ``models_loaded=False``) during
+    development and unit tests.
     """
 
     missing = [name for name in REQUIRED_VARS if not os.environ.get(name, "").strip()]
@@ -116,9 +115,7 @@ def load_config(*, allow_missing_required: bool = False) -> InferenceConfig | No
         ),
         auth_mode=_read_auth_mode(_read_optional("INFERENCE_AUTH_MODE", "iam")),
         inference_api_key=_read_api_key(),
-        port=_coerce_int(
-            "PORT", _read_optional("PORT", "8080"), minimum=1, maximum=65535
-        ),
+        port=_coerce_int("PORT", _read_optional("PORT", "8080"), minimum=1, maximum=65535),
         log_level=_read_optional("LOG_LEVEL", "INFO").upper(),
     )
 

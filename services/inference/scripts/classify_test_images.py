@@ -3,7 +3,7 @@
 
 Walks a directory of test images, POSTs each one to a running inference service,
 and writes the responses to a JSONL file. Refuses to run unless the service
-reports ``auth_mode == "open"`` so we never accidentally call a deployed
+reports ``auth_mode == "open"`` so we never accidentally hammer a deployed
 production endpoint.
 
 Usage:
@@ -25,8 +25,8 @@ from pathlib import Path
 import httpx
 
 
-def _abs_local_path(path: Path) -> str:
-    return str(path.resolve())
+def _abs_local_path(p: Path) -> str:
+    return str(p.resolve())
 
 
 def parse_args() -> argparse.Namespace:
@@ -123,9 +123,9 @@ def main() -> int:
                         successes += 1
                         for det in body.get("detections", []):
                             top = (det.get("predictions") or [{}])[0]
-                            species = top.get("species")
-                            if species:
-                                top1_counter[species] += 1
+                            sp = top.get("species")
+                            if sp:
+                                top1_counter[sp] += 1
                         record = {
                             "file": image.name,
                             "status": "ok",
@@ -140,7 +140,10 @@ def main() -> int:
                             "body": resp.text[:500],
                         }
                 out.write(json.dumps(record) + "\n")
-                print(f"{image.name:40s}  {record['status']}", flush=True)
+                print(
+                    f"{image.name:40s}  {record['status']}",
+                    flush=True,
+                )
 
         print()
         print(f"Total: {len(images)}  Ok: {successes}  Failed: {failures}")

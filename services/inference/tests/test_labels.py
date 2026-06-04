@@ -27,8 +27,10 @@ def test_parse_labels_returns_46_entries() -> None:
 )
 def test_known_rows() -> None:
     entries = parse_labels(LABELS_PATH)
+    # Row 0 — first line in labels.txt.
     assert entries[0].species_key == "Alectura_lathami"
     assert entries[0].common_name == "australian brushturkey"
+    # Row 2 — Bos taurus / cattle.
     assert entries[2].species_key == "Bos_taurus"
     assert entries[2].common_name == "cattle"
 

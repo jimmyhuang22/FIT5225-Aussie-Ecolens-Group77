@@ -18,5 +18,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         if not str(attributes.get(name, "")).strip()
     ]
     if missing:
-        raise ValueError("Missing required sign-up attributes: " + ", ".join(missing))
+        raise ValueError(
+            "Missing required sign-up attributes: " + ", ".join(missing)
+        )
     return event

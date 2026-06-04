@@ -110,6 +110,7 @@ cat <<BANNER
 ============================================================
 BANNER
 
+# 1. Ensure service account exists.
 if ! gcloud iam service-accounts describe "${SA_EMAIL}" --project="${PROJECT}" >/dev/null 2>&1; then
   echo "Creating service account ${SA_EMAIL}..."
   set -x
@@ -121,6 +122,7 @@ else
   echo "Service account ${SA_EMAIL} already exists."
 fi
 
+# 2. Ensure SA can read the model bucket.
 set -x
 gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
   --member="serviceAccount:${SA_EMAIL}" \
@@ -138,8 +140,8 @@ if [[ -n "${API_KEY_SECRET}" ]]; then
   set +x
 fi
 
-# Do not enable shell tracing here because legacy --set-env-vars may contain
-# INFERENCE_API_KEY.
+# 3. Deploy. Do not enable shell tracing here because legacy --set-env-vars may
+# contain INFERENCE_API_KEY.
 COMMON_ENV_VARS="MODEL_PATH_MD=${PREFIX}/mdv5a.pt,MODEL_PATH_SPECIES=${PREFIX}/speciesnet-au-v1.pt,LABELS_PATH=${PREFIX}/labels.txt,MODEL_VERSION_MD=mdv5a-${MODEL_VERSION},MODEL_VERSION_SPECIES=speciesnet-au-${MODEL_VERSION},INFERENCE_AUTH_MODE=api_key,LOG_LEVEL=INFO"
 
 SECRET_FLAGS=()

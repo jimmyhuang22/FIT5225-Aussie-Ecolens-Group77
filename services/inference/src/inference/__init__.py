@@ -1,3 +1,3 @@
-"""Aussie EcoLens Cloud Run inference service."""
+"""Aussie EcoLens inference service package."""
 
 __version__ = "0.1.0"

@@ -1,6 +1,14 @@
-import { useState, type FormEvent } from "react";
+﻿import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { confirmSignUp, resendSignUpCode } from "aws-amplify/auth";
+import { MailCheck } from "lucide-react";
+import { toast } from "sonner";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface ConfirmLocationState {
   email?: string;
@@ -9,8 +17,7 @@ interface ConfirmLocationState {
 export function ConfirmSignUpPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const initialEmail =
-    (location.state as ConfirmLocationState | null)?.email ?? "";
+  const initialEmail = (location.state as ConfirmLocationState | null)?.email ?? "";
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,10 +32,12 @@ export function ConfirmSignUpPage() {
     setSubmitting(true);
     try {
       await confirmSignUp({ username: email, confirmationCode: code });
+      toast.success("Email confirmed", { description: "You can sign in now." });
       navigate("/sign-in", { state: { email } });
     } catch (err) {
       const message = err instanceof Error ? err.message : "confirm_failed";
       setError(message);
+      toast.error("Confirmation failed", { description: message });
     } finally {
       setSubmitting(false);
     }
@@ -40,63 +49,62 @@ export function ConfirmSignUpPage() {
     setResending(true);
     try {
       await resendSignUpCode({ username: email });
-      setInfo("Verification code re-sent. Check your inbox.");
+      const message = "Verification code re-sent. Check your inbox.";
+      setInfo(message);
+      toast.success("Code re-sent", { description: message });
     } catch (err) {
       const message = err instanceof Error ? err.message : "resend_failed";
       setError(message);
+      toast.error("Could not resend code", { description: message });
     } finally {
       setResending(false);
     }
   }
 
   return (
-    <section className="page">
-      <h1>Confirm Sign Up</h1>
-      <p>Enter the 6-digit code Cognito emailed to you.</p>
+    <Card className="auth-card">
+      <CardHeader>
+        <div className="mb-2 flex size-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+          <MailCheck className="size-5" />
+        </div>
+        <CardTitle className="text-2xl">Confirm sign up</CardTitle>
+        <CardDescription>Enter the 6-digit code Cognito emailed to you.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="space-y-4" onSubmit={onSubmit}>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="code">Verification code</Label>
+            <Input id="code" type="text" required inputMode="numeric" pattern="[0-9]*" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" />
+          </div>
 
-      <form className="form" onSubmit={onSubmit}>
-        <label>
-          Email
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-        </label>
-        <label>
-          Verification code
-          <input
-            type="text"
-            required
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            autoComplete="one-time-code"
-          />
-        </label>
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Could not confirm account</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {info && (
+            <Alert variant="info">
+              <AlertDescription>{info}</AlertDescription>
+            </Alert>
+          )}
 
-        {error && <div className="error">{error}</div>}
-        {info && <div className="auth-status">{info}</div>}
+          <Button className="w-full" type="submit" disabled={submitting}>
+            {submitting ? "Confirming..." : "Confirm account"}
+          </Button>
+          <Button className="w-full" type="button" variant="outline" onClick={onResend} disabled={resending || !email}>
+            {resending ? "Re-sending..." : "Resend code"}
+          </Button>
+        </form>
 
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Confirming..." : "Confirm"}
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={onResend}
-          disabled={resending || !email}
-        >
-          {resending ? "Re-sending..." : "Resend code"}
-        </button>
-      </form>
-
-      <p className="link-row">
-        Back to <Link to="/sign-in">Sign in</Link>
-      </p>
-    </section>
+        <p className="mt-5 text-sm text-muted-foreground">
+          Back to <Link to="/sign-in">sign in</Link>
+        </p>
+      </CardContent>
+    </Card>
   );
 }

@@ -212,6 +212,7 @@ export async function queryMediaByFile(file: File): Promise<MediaQueryResponse> 
 
 export async function bulkUpdateTags(
   mediaIds: string[],
+  urls: string[],
   tags: string[],
   operation: 0 | 1,
 ): Promise<MediaItem[]> {
@@ -222,7 +223,7 @@ export async function bulkUpdateTags(
   const res = await fetch(`${API_BASE_URL}/media/tags/bulk`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ mediaIds, tags, operation }),
+    body: JSON.stringify({ mediaIds, urls, tags, operation }),
   });
   if (!res.ok) {
     throw new ApiError(res.status, `bulk_tags_failed_${res.status}`);

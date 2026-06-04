@@ -274,10 +274,15 @@ export function MediaPage() {
       setNotice({ tone: "error", text: "Enter at least one tag." });
       return;
     }
+    const selectedItems = items.filter((item) => selectedIds.includes(item.mediaId));
+    const urls = selectedItems
+      .map((item) => item.originalUrl || item.thumbnailUrl || item.storageObject)
+      .filter((url): url is string => Boolean(url));
     setNotice({ tone: "info", text: "Updating tags..." });
     try {
       const updated = await bulkUpdateTags(
         selectedIds,
+        urls,
         tags,
         bulkOperation === "1" ? 1 : 0,
       );

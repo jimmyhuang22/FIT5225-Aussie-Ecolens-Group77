@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -25,9 +26,11 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # Re-import so the @app.lifespan picks up the cleared env.
     import importlib
 
+    sys.modules.pop("inference.models", None)
     import inference.main as main_module
 
     importlib.reload(main_module)
+    assert "inference.models" not in sys.modules
     return TestClient(main_module.app)
 
 

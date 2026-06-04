@@ -34,7 +34,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 from urllib.parse import urlparse
 
 import httpx
@@ -44,13 +44,6 @@ from fastapi.responses import JSONResponse
 from . import __version__
 from .config import ConfigError, InferenceConfig, load_config
 from .gcs import download_if_gcs, is_gcs_uri
-from .labels import parse_labels
-from .models import (
-    LoadedModels,
-    infer_one_image,
-    load_megadetector,
-    load_speciesnet,
-)
 from .schemas import (
     HealthResponse,
     InferenceImage,
@@ -60,6 +53,7 @@ from .schemas import (
 
 LOG = logging.getLogger(__name__)
 
+LoadedModels = Any
 _MAX_BASE64_BYTES = 10 * 1024 * 1024  # 10 MB decoded
 _MAX_URL_BYTES = 25 * 1024 * 1024  # 25 MB downloaded
 _MODEL_DOWNLOAD_DIR = Path("/tmp/aussie-ecolens-models")
@@ -84,6 +78,9 @@ def _configure_logging(level: str) -> None:
 
 
 def _load_all(config: InferenceConfig) -> LoadedModels:
+    from .labels import parse_labels
+    from .models import LoadedModels, load_megadetector, load_speciesnet
+
     _MODEL_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
     md_path = download_if_gcs(config.model_path_md, _MODEL_DOWNLOAD_DIR)
     species_path = download_if_gcs(config.model_path_species, _MODEL_DOWNLOAD_DIR)
@@ -280,6 +277,8 @@ async def inference(request: Request, payload: InferenceRequest) -> InferenceRes
         payload.image, allow_local_path=(config.auth_mode == "open")
     )
     try:
+        from .models import infer_one_image
+
         image_size, detections = infer_one_image(
             image_path=resolved.path,
             loaded=loaded,

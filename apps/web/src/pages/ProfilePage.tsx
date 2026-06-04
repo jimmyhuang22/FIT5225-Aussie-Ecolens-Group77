@@ -1,6 +1,13 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "aws-amplify/auth";
+import { ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchMe, ApiError, type MeResponse } from "../api";
 import { useAuth } from "../auth/AuthContext";
 
@@ -47,9 +54,9 @@ export function ProfilePage() {
     setSigningOut(true);
     try {
       await signOut({ global: true });
+      toast.success("Signed out successfully.");
     } catch {
-      // Even if global sign-out fails (e.g. offline), clear local state
-      // and bounce the user back to /sign-in.
+      toast.warning("Local session cleared, but global sign-out could not be confirmed.");
     } finally {
       await refresh();
       navigate("/sign-in");
@@ -57,58 +64,51 @@ export function ProfilePage() {
   }
 
   return (
-    <section className="page">
-      <h1>Profile</h1>
-      <p>
-        This page is protected by the server-side <code>requireCognitoAuth</code>
-        middleware and proves the end-to-end auth flow against{" "}
-        <code>GET /api/me</code>.
-      </p>
+    <Card className="w-full max-w-3xl">
+      <CardHeader>
+        <div className="mb-2 flex size-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+          <ShieldCheck className="size-5" />
+        </div>
+        <CardTitle className="text-2xl">Profile</CardTitle>
+        <CardDescription>
+          Protected Cognito identity returned by <code>GET /api/me</code>.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading && <Alert variant="info"><AlertDescription>Loading /api/me...</AlertDescription></Alert>}
+        {error && (
+          <Alert variant="destructive">
+            <AlertTitle>Profile request failed</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {loading && <div className="auth-status">Loading /api/me...</div>}
-      {error && <div className="error">{error}</div>}
+        {data && (
+          <div className="overflow-hidden rounded-lg border">
+            <dl className="divide-y">
+              {[
+                ["sub", display(data.user.sub)],
+                ["username", display(data.user.username)],
+                ["email", display(data.user.email)],
+                ["given_name", display(data.user.given_name)],
+                ["family_name", display(data.user.family_name)],
+                ["token_use", display(data.user.token_use)],
+              ].map(([key, value]) => (
+                <div className="grid gap-2 p-4 sm:grid-cols-[10rem_1fr]" key={key}>
+                  <dt className="font-medium text-muted-foreground">{key}</dt>
+                  <dd className="break-all">
+                    {key === "token_use" ? <Badge variant="secondary">{value}</Badge> : value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
 
-      {data && (
-        <table className="user-table">
-          <tbody>
-            <tr>
-              <th>sub</th>
-              <td>{display(data.user.sub)}</td>
-            </tr>
-            <tr>
-              <th>username</th>
-              <td>{display(data.user.username)}</td>
-            </tr>
-            <tr>
-              <th>email</th>
-              <td>{display(data.user.email)}</td>
-            </tr>
-            <tr>
-              <th>given_name</th>
-              <td>{display(data.user.given_name)}</td>
-            </tr>
-            <tr>
-              <th>family_name</th>
-              <td>{display(data.user.family_name)}</td>
-            </tr>
-            <tr>
-              <th>token_use</th>
-              <td>{display(data.user.token_use)}</td>
-            </tr>
-          </tbody>
-        </table>
-      )}
-
-      <div className="form" style={{ marginTop: "1.25rem" }}>
-        <button
-          type="button"
-          className="secondary"
-          onClick={onSignOut}
-          disabled={signingOut}
-        >
-          {signingOut ? "Signing out..." : "Sign Out"}
-        </button>
-      </div>
-    </section>
+        <Button type="button" variant="outline" onClick={onSignOut} disabled={signingOut}>
+          {signingOut ? "Signing out..." : "Sign out"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

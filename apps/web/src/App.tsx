@@ -1,5 +1,9 @@
-import { Navigate, Route, Routes, Link, useNavigate } from "react-router-dom";
+﻿import { Navigate, Route, Routes, Link, useNavigate } from "react-router-dom";
 import { signOut } from "aws-amplify/auth";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
 import { SignInPage } from "./pages/SignInPage";
@@ -15,8 +19,9 @@ function Shell() {
   async function onSignOut() {
     try {
       await signOut({ global: true });
+      toast.success("Signed out successfully.");
     } catch {
-      // Clear local state even if the network sign-out request fails.
+      toast.warning("Local session cleared, but global sign-out could not be confirmed.");
     } finally {
       await refresh();
       navigate("/sign-in", { replace: true });
@@ -34,9 +39,9 @@ function Shell() {
             <>
               <Link to="/media">Media</Link>
               <Link to="/profile">Profile</Link>
-              <button type="button" className="nav-button" onClick={onSignOut}>
+              <Button type="button" variant="ghost" size="sm" onClick={onSignOut}>
                 Sign Out
-              </button>
+              </Button>
             </>
           ) : (
             <>
@@ -54,8 +59,6 @@ function Shell() {
               user ? (
                 <Navigate to="/media" replace />
               ) : (
-                // Assignment Section 3: unauthenticated users land on sign-up
-                // (sign-in is reachable via the link inside the sign-up page).
                 <Navigate to="/sign-up" replace />
               )
             }
@@ -82,6 +85,7 @@ function Shell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <Toaster richColors closeButton position="top-right" />
     </div>
   );
 }

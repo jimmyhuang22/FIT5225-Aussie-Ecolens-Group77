@@ -1,6 +1,14 @@
-import { useState, type FormEvent } from "react";
+﻿import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { signIn } from "aws-amplify/auth";
+import { LogIn } from "lucide-react";
+import { toast } from "sonner";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "../auth/AuthContext";
 
 interface SignInLocationState {
@@ -26,6 +34,7 @@ export function SignInPage() {
       const result = await signIn({ username: email, password });
       if (result.isSignedIn) {
         await refresh();
+        toast.success("Welcome back to Aussie EcoLens.");
         navigate(locationState?.from ?? "/media", { replace: true });
         return;
       }
@@ -38,48 +47,62 @@ export function SignInPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "sign_in_failed";
       setError(message);
+      toast.error("Sign in failed", { description: message });
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <section className="page">
-      <h1>Sign In</h1>
-      <p>Use the email and password you registered with Cognito.</p>
+    <Card className="auth-card">
+      <CardHeader>
+        <div className="mb-2 flex size-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+          <LogIn className="size-5" />
+        </div>
+        <CardTitle className="text-2xl">Sign in</CardTitle>
+        <CardDescription>Use the Cognito account you created for the demo.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="space-y-4" onSubmit={onSubmit}>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
 
-      <form className="form" onSubmit={onSubmit}>
-        <label>
-          Email
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </label>
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Could not sign in</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-        {error && <div className="error">{error}</div>}
+          <Button className="w-full" type="submit" disabled={submitting}>
+            {submitting ? "Signing in..." : "Sign in"}
+          </Button>
+        </form>
 
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
-
-      <p className="link-row">
-        Need an account? <Link to="/sign-up">Sign up</Link>
-      </p>
-    </section>
+        <p className="mt-5 text-sm text-muted-foreground">
+          Need an account? <Link to="/sign-up">Sign up</Link>
+        </p>
+      </CardContent>
+    </Card>
   );
 }

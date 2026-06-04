@@ -1,0 +1,516 @@
+openapi: 3.0.3
+info:
+  title: Aussie EcoLens AWS Serverless API
+  version: 0.1.0
+  description: Cognito-protected AWS API Gateway + Lambda contract for media upload, tag query, and subscriptions.
+servers:
+  - url: https://{apiId}.execute-api.{region}.amazonaws.com/Prod
+    variables:
+      apiId:
+        default: example
+      region:
+        default: ap-southeast-2
+security:
+  - cognitoIdToken: []
+paths:
+  /api/me:
+    get:
+      summary: Return the authenticated Cognito user.
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+  /media/upload-url:
+    post:
+      summary: Create a media record and S3 presigned upload URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, checksumSha256]
+              properties:
+                filename:
+                  type: string
+                contentType:
+                  type: string
+                  example: image/jpeg
+                mediaType:
+                  type: string
+                  enum: [image, video]
+                checksumSha256:
+                  type: string
+                  pattern: "^[0-9a-f]{64}$"
+      responses:
+        "200":
+          description: Upload URL and media ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+  /media/{mediaId}/complete:
+    post:
+      summary: Mark an upload as client-complete.
+      parameters:
+        - $ref: "#/components/parameters/MediaId"
+      responses:
+        "200":
+          description: Updated media record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaResponse"
+  /media:
+    get:
+      summary: List the caller's media, optionally filtered by tag count.
+      parameters:
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: minCount
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: Media list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaListResponse"
+  /media/{mediaId}:
+    get:
+      summary: Get one media item.
+      parameters:
+        - $ref: "#/components/parameters/MediaId"
+      responses:
+        "200":
+          description: Media record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaResponse"
+    delete:
+      summary: Delete one media item and its S3 original/thumbnail objects.
+      parameters:
+        - $ref: "#/components/parameters/MediaId"
+      responses:
+        "200":
+          description: Delete result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteMediaResponse"
+  /media/delete:
+    post:
+      summary: Bulk delete owned media by URL or object references.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                urls:
+                  type: array
+                  items:
+                    type: string
+                  description: Original or thumbnail URLs/object keys to delete.
+                mediaIds:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional internal IDs for UI-driven deletion.
+      responses:
+        "200":
+          description: Bulk delete result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkDeleteMediaResponse"
+  /media/query/tags:
+    post:
+      summary: Query media with multi-tag AND/count semantics.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tags]
+              properties:
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    minimum: 1
+      responses:
+        "200":
+          description: Matching media list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaQueryResponse"
+  /media/query/file:
+    post:
+      summary: Infer tags from a temporary query image and search existing media.
+      description: Accepts images only; video query-by-file is not part of the current API contract.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [base64]
+              properties:
+                base64:
+                  type: string
+                  description: Base64-encoded image bytes. The file is not persisted.
+      responses:
+        "200":
+          description: Inferred tags and matching media.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaQueryResponse"
+  /media/tags/bulk:
+    post:
+      summary: Add or remove tags on multiple owned media records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tags, operation]
+              properties:
+                mediaIds:
+                  type: array
+                  items:
+                    type: string
+                urls:
+                  type: array
+                  items:
+                    type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+                operation:
+                  type: integer
+                  enum: [0, 1]
+                  description: 1 adds tags, 0 removes tags.
+      responses:
+        "200":
+          description: Updated media records.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MediaItem"
+  /media/query/thumbnail:
+    post:
+      summary: Resolve an owned image thumbnail URL to the original image URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                thumbnailUrl:
+                  type: string
+                thumbnailObject:
+                  type: string
+      responses:
+        "200":
+          description: Original image URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mediaId:
+                    type: string
+                  thumbnailUrl:
+                    type: string
+                    nullable: true
+                  originalUrl:
+                    type: string
+                    nullable: true
+                  storageObject:
+                    type: string
+  /subscriptions:
+    get:
+      summary: List tag subscriptions.
+      responses:
+        "200":
+          description: Subscription list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionListResponse"
+    post:
+      summary: Create a tag subscription.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, tags]
+              properties:
+                email:
+                  type: string
+                  format: email
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Created subscription.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionResponse"
+  /subscriptions/{subscriptionId}:
+    delete:
+      summary: Disable a tag subscription.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Delete result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteSubscriptionResponse"
+components:
+  securitySchemes:
+    cognitoIdToken:
+      type: http
+      scheme: bearer
+      bearerFormat: Cognito ID JWT
+  parameters:
+    MediaId:
+      name: mediaId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    MeResponse:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            sub:
+              type: string
+            username:
+              type: string
+              nullable: true
+            email:
+              type: string
+              nullable: true
+            given_name:
+              type: string
+              nullable: true
+            family_name:
+              type: string
+              nullable: true
+            token_use:
+              type: string
+    UploadUrlResponse:
+      type: object
+      required: [mediaId, duplicate, uploadUrl, uploadHeaders, bucket, objectKey, expiresIn]
+      properties:
+        duplicate:
+          type: boolean
+        mediaId:
+          type: string
+        uploadUrl:
+          type: string
+          nullable: true
+        uploadHeaders:
+          type: object
+          additionalProperties:
+            type: string
+        bucket:
+          type: string
+          nullable: true
+        objectKey:
+          type: string
+          nullable: true
+        expiresIn:
+          type: integer
+        media:
+          $ref: "#/components/schemas/MediaItem"
+    MediaItem:
+      type: object
+      properties:
+        mediaId:
+          type: string
+        ownerSub:
+          type: string
+        originalUrl:
+          type: string
+          nullable: true
+        thumbnailUrl:
+          type: string
+          nullable: true
+        mediaType:
+          type: string
+          enum: [image, video]
+        checksumSha256:
+          type: string
+        checksumVerifiedAt:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        tagCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        modelVersion:
+          type: string
+        storageProvider:
+          type: string
+        storageBucket:
+          type: string
+        storageObject:
+          type: string
+        thumbnailObject:
+          type: string
+          nullable: true
+        processingError:
+          type: string
+          nullable: true
+        status:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        deletedAt:
+          type: string
+          nullable: true
+    MediaResponse:
+      type: object
+      properties:
+        media:
+          $ref: "#/components/schemas/MediaItem"
+    MediaListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaItem"
+    MediaQueryResponse:
+      type: object
+      properties:
+        query:
+          type: object
+          additionalProperties:
+            type: integer
+        inferredTagCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        modelVersion:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaItem"
+    DeleteMediaResponse:
+      type: object
+      properties:
+        mediaId:
+          type: string
+        deleted:
+          type: boolean
+    BulkDeleteMediaResponse:
+      type: object
+      properties:
+        deleted:
+          type: array
+          items:
+            type: object
+            properties:
+              mediaId:
+                type: string
+              storageObject:
+                type: string
+                nullable: true
+              thumbnailObject:
+                type: string
+                nullable: true
+              deletedAt:
+                type: string
+        count:
+          type: integer
+    Subscription:
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+        ownerSub:
+          type: string
+        email:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        snsStatus:
+          type: string
+          nullable: true
+        snsSubscriptionArn:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    SubscriptionResponse:
+      type: object
+      properties:
+        subscription:
+          $ref: "#/components/schemas/Subscription"
+    SubscriptionListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Subscription"
+    DeleteSubscriptionResponse:
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+        deleted:
+          type: boolean

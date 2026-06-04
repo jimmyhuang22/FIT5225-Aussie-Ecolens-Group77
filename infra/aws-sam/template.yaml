@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: Aussie EcoLens AWS serverless backend foundation.
+Description: Aussie EcoLens AWS serverless backend.
 
 Globals:
   Function:
@@ -34,12 +34,20 @@ Parameters:
   InferenceEndpointUrl:
     Type: String
     Default: ""
-    Description: Cloud Run inference endpoint used by the processor after upload.
+    Description: HTTP inference endpoint required for deployed tagging unless ALLOW_DEMO_FALLBACK is explicitly enabled.
   InferenceApiKey:
     Type: String
     Default: ""
     NoEcho: true
-    Description: Optional shared API key sent to the inference endpoint.
+    Description: Legacy optional shared API key sent to the inference endpoint. Prefer InferenceApiKeyParameterName for deployed environments.
+  InferenceApiKeyParameterName:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^/.+"
+    Description: Optional SSM SecureString parameter name containing the inference API key, for example /aussie-ecolens/dev/inference-api-key.
+
+Conditions:
+  HasInferenceApiKeyParameter: !Not [!Equals [!Ref InferenceApiKeyParameterName, ""]]
 
 Resources:
   PreSignUpFunction:
@@ -75,6 +83,9 @@ Resources:
         - Name: email
           Required: true
           Mutable: true
+        # Existing Cognito pools cannot switch standard attributes between
+        # optional and required after creation; PreSignUpFunction enforces
+        # these profile attributes for the deployed pool.
         - Name: given_name
           Required: false
           Mutable: true
@@ -232,19 +243,24 @@ Resources:
     Properties:
       CodeUri: ../../services/aws-api/src/
       Handler: app.handler
-      Timeout: 60
+      Timeout: 120
       MemorySize: 512
       Environment:
         Variables:
-          MEDIA_BUCKET: !Ref MediaBucket
+          MEDIA_BUCKET: !Sub "${AppName}-${AWS::AccountId}-${AWS::Region}-media"
           MEDIA_TABLE: !Ref MediaTable
           SUBSCRIPTION_TABLE: !Ref SubscriptionTable
           DEDUP_TABLE: !Ref DedupTable
           NOTIFICATION_TOPIC_ARN: !Ref NotificationTopic
           CORS_ALLOWED_ORIGIN: !Ref AllowedCorsOrigin
           PRESIGNED_URL_TTL_SECONDS: "900"
+          DEDUP_RESERVATION_TTL_SECONDS: "900"
           INFERENCE_ENDPOINT_URL: !Ref InferenceEndpointUrl
           INFERENCE_API_KEY: !Ref InferenceApiKey
+          INFERENCE_API_KEY_PARAMETER_NAME: !Ref InferenceApiKeyParameterName
+          INFERENCE_TOP_K: "3"
+          INFERENCE_TIMEOUT_SECONDS: "90"
+          MAX_QUERY_FILE_BYTES: "6291456"
       Policies:
         - Statement:
             Sid: ApiPresignUploads
@@ -304,6 +320,15 @@ Resources:
               - dynamodb:UpdateItem
               - dynamodb:DeleteItem
             Resource: !GetAtt DedupTable.Arn
+        - !If
+          - HasInferenceApiKeyParameter
+          - Statement:
+              Sid: ApiReadInferenceApiKeyParameter
+              Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${InferenceApiKeyParameterName}"
+          - !Ref AWS::NoValue
         - Statement:
             Sid: ApiCreateEmailSubscriptions
             Effect: Allow
@@ -331,9 +356,9 @@ Resources:
             Action:
               - sns:Unsubscribe
               - sns:SetSubscriptionAttributes
-            # SNS subscription attribute APIs do not support topic-level
-            # resource scoping for every operation. Keep this only on the API
-            # Lambda; the processor has publish-only SNS access.
+            # SNS subscription APIs do not expose the topic ARN as a
+            # resource-level permission for every subscription operation.
+            # Keep this only on the API Lambda; the processor has publish-only SNS.
             Resource: "*"
       Events:
         Root:
@@ -358,15 +383,21 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          MEDIA_BUCKET: !Ref MediaBucket
+          MEDIA_BUCKET: !Sub "${AppName}-${AWS::AccountId}-${AWS::Region}-media"
           MEDIA_TABLE: !Ref MediaTable
           DEDUP_TABLE: !Ref DedupTable
           NOTIFICATION_TOPIC_ARN: !Ref NotificationTopic
           INFERENCE_ENDPOINT_URL: !Ref InferenceEndpointUrl
           INFERENCE_API_KEY: !Ref InferenceApiKey
+          INFERENCE_API_KEY_PARAMETER_NAME: !Ref InferenceApiKeyParameterName
           INFERENCE_TOP_K: "3"
           INFERENCE_TIMEOUT_SECONDS: "90"
+          ALLOW_DEMO_FALLBACK: "false"
+          MODEL_VERSION: aws-demo-adapter-v1
           VIDEO_FRAME_RATE: "1"
+          VIDEO_MAX_FRAMES: "0"
+          VIDEO_EXTRACTION_TIMEOUT_SECONDS: "90"
+          VIDEO_PROCESSING_BUDGET_SECONDS: "105"
       Policies:
         - Statement:
             Sid: ProcessorReadMediaObjects
@@ -395,6 +426,15 @@ Resources:
             Action:
               - dynamodb:UpdateItem
             Resource: !GetAtt DedupTable.Arn
+        - !If
+          - HasInferenceApiKeyParameter
+          - Statement:
+              Sid: ProcessorReadInferenceApiKeyParameter
+              Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${InferenceApiKeyParameterName}"
+          - !Ref AWS::NoValue
         - Statement:
             Sid: ProcessorPublishTagNotifications
             Effect: Allow
@@ -423,9 +463,12 @@ Outputs:
   CognitoUserPoolClientId:
     Description: Cognito app client ID for the frontend.
     Value: !Ref UserPoolClient
+  PreSignUpFunctionName:
+    Description: Cognito PreSignUp trigger enforcing email, first name, and last name.
+    Value: !Ref PreSignUpFunction
   MediaBucketName:
     Description: Private S3 bucket for uploaded media.
-    Value: !Ref MediaBucket
+    Value: !Sub "${AppName}-${AWS::AccountId}-${AWS::Region}-media"
   MediaTableName:
     Description: DynamoDB table storing media metadata.
     Value: !Ref MediaTable
@@ -436,5 +479,5 @@ Outputs:
     Description: DynamoDB table storing owner-scoped checksum reservations.
     Value: !Ref DedupTable
   NotificationTopicArn:
-    Description: SNS topic used by the API and processor.
+    Description: SNS topic used by the processor.
     Value: !Ref NotificationTopic

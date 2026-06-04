@@ -109,6 +109,7 @@ $body = @{
   filename = "Alectura_lathami_1.JPG"
   contentType = "image/jpeg"
   mediaType = "image"
+  sizeBytes = (Get-Item $file).Length
   checksumSha256 = $checksum
 } | ConvertTo-Json
 

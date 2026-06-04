@@ -58,7 +58,8 @@ stale pending media record without an S3 object is not treated as a completed
 duplicate; while the reservation is still active, the API reissues an upload URL
 for the same media record instead of creating a second one. `checksumSha256` is
 required and must be the browser-calculated 64-character SHA-256 hex digest of
-the file bytes.
+the file bytes. The backend also validates `mediaType`, `contentType`, filename
+extension, and `sizeBytes` before it signs any S3 PUT URL.
 
 Request:
 
@@ -67,6 +68,7 @@ Request:
   "filename": "Alectura_lathami_1.JPG",
   "contentType": "image/jpeg",
   "mediaType": "image",
+  "sizeBytes": 2457600,
   "checksumSha256": "f2ca1bb6c7e907d06dafe4687e579fce6f5f8a1d22fba0a3f1d49e52d1f1c0ab"
 }
 ```

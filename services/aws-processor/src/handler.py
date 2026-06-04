@@ -10,6 +10,7 @@ import shutil
 import socket
 import subprocess
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
@@ -282,6 +283,18 @@ def _post_inference(
             f"{timeout}s. Cloud Run may still be cold-starting; "
             "retry this media or use a shorter video."
         ) from exc
+    except urllib.error.HTTPError as exc:
+        body = _http_error_body(exc)
+        raise RuntimeError(f"inference service returned {exc.code}: {body}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("inference service returned invalid response") from exc
+
+
+def _http_error_body(exc: urllib.error.HTTPError, limit: int = 500) -> str:
+    body = exc.read().decode("utf-8", errors="replace").strip()
+    if not body:
+        body = str(exc.reason or "empty response")
+    return body[:limit]
 
 
 def _inference_headers() -> dict[str, str]:

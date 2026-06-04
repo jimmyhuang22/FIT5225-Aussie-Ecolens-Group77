@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import sys
 import types
 import unittest
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -342,6 +344,112 @@ class HandlerErrorHandlingTest(unittest.TestCase):
                 self.app._load_owned_media(_event("GET", "/media/media-1"), "media-1")
         finally:
             self.app.media_table = original_media_table
+
+    def test_upload_url_requires_size_bytes(self) -> None:
+        body = {
+            "filename": "kangaroo.jpg",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "checksumSha256": "a" * 64,
+        }
+
+        response = self.app.handler(
+            _event("POST", "/media/upload-url", json.dumps(body)),
+            None,
+        )
+
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(
+            json.loads(response["body"])["message"],
+            "sizeBytes must be a positive integer",
+        )
+
+    def test_upload_validation_rejects_mime_extension_and_size_mismatches(self) -> None:
+        invalid_cases = [
+            (
+                "bad.exe",
+                "image/jpeg",
+                "image",
+                1024,
+                "unsupported image file extension",
+            ),
+            (
+                "photo.jpg",
+                "application/octet-stream",
+                "image",
+                1024,
+                "unsupported image contentType",
+            ),
+            (
+                "clip.mp4",
+                "video/mp4",
+                "video",
+                self.app.MAX_VIDEO_UPLOAD_BYTES + 1,
+                "video file is too large",
+            ),
+            (
+                "photo.jpg",
+                "image/jpeg",
+                "audio",
+                1024,
+                "mediaType must be image or video",
+            ),
+        ]
+
+        for filename, content_type, media_type, size_bytes, message in invalid_cases:
+            with self.subTest(filename=filename, message=message):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.app._validate_upload_file(
+                        filename,
+                        content_type,
+                        media_type,
+                        size_bytes,
+                    )
+
+    def test_upload_validation_accepts_safe_image_and_video_types(self) -> None:
+        self.assertEqual(
+            self.app._validate_upload_file(
+                "../kangaroo.JPG",
+                "image/jpeg",
+                "image",
+                self.app.MAX_IMAGE_UPLOAD_BYTES,
+            ),
+            "kangaroo.JPG",
+        )
+        self.assertEqual(
+            self.app._validate_upload_file(
+                "clips/wombat.webm",
+                "video/webm",
+                "video",
+                self.app.MAX_VIDEO_UPLOAD_BYTES,
+            ),
+            "wombat.webm",
+        )
+
+    def test_post_inference_reports_http_error_body(self) -> None:
+        original_urlopen = self.app.urllib.request.urlopen
+        original_endpoint = self.app.INFERENCE_ENDPOINT_URL
+
+        def raise_http_error(*_args: Any, **_kwargs: Any) -> None:
+            raise urllib.error.HTTPError(
+                url="https://inference.example/inference",
+                code=503,
+                msg="Service Unavailable",
+                hdrs={},
+                fp=io.BytesIO(b'{"error":"models_not_loaded"}'),
+            )
+
+        self.app.urllib.request.urlopen = raise_http_error
+        self.app.INFERENCE_ENDPOINT_URL = "https://inference.example"
+        try:
+            with self.assertRaisesRegex(
+                ValueError,
+                r'inference service returned 503: \{"error":"models_not_loaded"\}',
+            ):
+                self.app._post_inference({"base64": "abc"})
+        finally:
+            self.app.urllib.request.urlopen = original_urlopen
+            self.app.INFERENCE_ENDPOINT_URL = original_endpoint
 
 
 if __name__ == "__main__":

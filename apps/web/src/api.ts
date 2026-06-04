@@ -118,6 +118,7 @@ export async function createUploadUrl(
       filename: file.name,
       contentType: file.type || "application/octet-stream",
       mediaType: file.type.startsWith("video/") ? "video" : "image",
+      sizeBytes: file.size,
       checksumSha256,
     }),
   });

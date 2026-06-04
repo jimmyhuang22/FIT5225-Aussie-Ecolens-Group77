@@ -32,7 +32,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [filename, checksumSha256]
+              required: [filename, contentType, mediaType, sizeBytes, checksumSha256]
               properties:
                 filename:
                   type: string
@@ -42,6 +42,10 @@ paths:
                 mediaType:
                   type: string
                   enum: [image, video]
+                sizeBytes:
+                  type: integer
+                  minimum: 1
+                  example: 2457600
                 checksumSha256:
                   type: string
                   pattern: "^[0-9a-f]{64}$"

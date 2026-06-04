@@ -8,6 +8,7 @@ import os
 import re
 import socket
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -36,6 +37,17 @@ INFERENCE_API_KEY_PARAMETER_NAME = os.environ.get(
 INFERENCE_TOP_K = int(os.environ.get("INFERENCE_TOP_K", "3"))
 INFERENCE_TIMEOUT_SECONDS = int(os.environ.get("INFERENCE_TIMEOUT_SECONDS", "90"))
 MAX_QUERY_FILE_BYTES = int(os.environ.get("MAX_QUERY_FILE_BYTES", str(6 * 1024 * 1024)))
+MAX_IMAGE_UPLOAD_BYTES = int(
+    os.environ.get("MAX_IMAGE_UPLOAD_BYTES", str(15 * 1024 * 1024))
+)
+MAX_VIDEO_UPLOAD_BYTES = int(
+    os.environ.get("MAX_VIDEO_UPLOAD_BYTES", str(200 * 1024 * 1024))
+)
+
+ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_VIDEO_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm"}
 
 LOG = logging.getLogger(__name__)
 
@@ -142,16 +154,15 @@ def _create_upload_url(event: dict[str, Any]) -> dict[str, Any]:
     owner_sub = _owner_sub(event)
     body = _body(event)
     filename = str(body.get("filename") or "").strip()
-    content_type = str(body.get("contentType") or "application/octet-stream")
+    content_type = _normalize_content_type(body.get("contentType"))
     media_type = str(body.get("mediaType") or _infer_media_type(content_type))
+    size_bytes = _parse_upload_size(body.get("sizeBytes"))
     checksum = _normalize_checksum_sha256(body.get("checksumSha256"))
     if not filename:
         raise ValueError("filename is required")
-    if media_type not in ("image", "video"):
-        raise ValueError("mediaType must be image or video")
+    safe_name = _validate_upload_file(filename, content_type, media_type, size_bytes)
 
     owner_checksum_key = _owner_checksum_key(owner_sub, checksum)
-    safe_name = filename.replace("\\", "/").split("/")[-1]
 
     for _attempt in range(2):
         duplicate = _find_duplicate(owner_sub, checksum)
@@ -679,6 +690,56 @@ def _infer_media_type(content_type: str) -> str:
     return "video" if content_type.startswith("video/") else "image"
 
 
+def _normalize_content_type(value: Any) -> str:
+    return str(value or "application/octet-stream").split(";", 1)[0].strip().lower()
+
+
+def _parse_upload_size(value: Any) -> int:
+    if isinstance(value, bool):
+        raise ValueError("sizeBytes must be a positive integer")
+    try:
+        size_bytes = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("sizeBytes must be a positive integer") from exc
+    if size_bytes <= 0:
+        raise ValueError("sizeBytes must be a positive integer")
+    return size_bytes
+
+
+def _validate_upload_file(
+    filename: str, content_type: str, media_type: str, size_bytes: int
+) -> str:
+    if media_type not in ("image", "video"):
+        raise ValueError("mediaType must be image or video")
+
+    safe_name = filename.replace("\\", "/").split("/")[-1].strip()
+    if not safe_name:
+        raise ValueError("filename is required")
+    extension = _filename_extension(safe_name)
+
+    if media_type == "image":
+        if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+            raise ValueError("unsupported image contentType")
+        if extension not in ALLOWED_IMAGE_EXTENSIONS:
+            raise ValueError("unsupported image file extension")
+        if size_bytes > MAX_IMAGE_UPLOAD_BYTES:
+            raise ValueError("image file is too large")
+    else:
+        if content_type not in ALLOWED_VIDEO_CONTENT_TYPES:
+            raise ValueError("unsupported video contentType")
+        if extension not in ALLOWED_VIDEO_EXTENSIONS:
+            raise ValueError("unsupported video file extension")
+        if size_bytes > MAX_VIDEO_UPLOAD_BYTES:
+            raise ValueError("video file is too large")
+    return safe_name
+
+
+def _filename_extension(filename: str) -> str:
+    if "." not in filename:
+        return ""
+    return f".{filename.rsplit('.', 1)[1].lower()}"
+
+
 def _with_fresh_media_urls(item: dict[str, Any]) -> dict[str, Any]:
     hydrated = dict(item)
     bucket = hydrated.get("storageBucket") or MEDIA_BUCKET
@@ -1059,6 +1120,18 @@ def _post_inference(image: dict[str, str]) -> dict[str, Any]:
             return json.loads(response.read().decode("utf-8"))
     except (TimeoutError, socket.timeout) as exc:
         raise ValueError("inference request timed out") from exc
+    except urllib.error.HTTPError as exc:
+        body = _http_error_body(exc)
+        raise ValueError(f"inference service returned {exc.code}: {body}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError("inference service returned invalid response") from exc
+
+
+def _http_error_body(exc: urllib.error.HTTPError, limit: int = 500) -> str:
+    body = exc.read().decode("utf-8", errors="replace").strip()
+    if not body:
+        body = str(exc.reason or "empty response")
+    return body[:limit]
 
 
 def _inference_headers() -> dict[str, str]:

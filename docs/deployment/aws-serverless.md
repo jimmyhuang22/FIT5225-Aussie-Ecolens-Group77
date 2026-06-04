@@ -185,6 +185,14 @@ and return the response shape documented in `docs/contracts/api-contract.md`.
 When Cloud Run is deployed in `api_key` mode, the AWS processor sends
 `X-Inference-Api-Key` on each request.
 
+Keep the Cloud Run request timeout longer than the AWS inference caller timeout:
+AWS API and processor Lambdas default `INFERENCE_TIMEOUT_SECONDS` to `90`, while
+`deploy-cloudrun.sh` deploys Cloud Run with `CLOUD_RUN_TIMEOUT_SECONDS=300` by
+default. This prevents Cloud Run from terminating a cold-starting model request
+before AWS has finished waiting. For live demos, set `CLOUD_RUN_MIN_INSTANCES=1`
+before the session, prewarm `/health` and one small `/inference` request, then
+reset min instances to `0` afterwards to avoid idle charges.
+
 ## Evidence To Capture
 
 - Cognito user pool and app client screenshots.

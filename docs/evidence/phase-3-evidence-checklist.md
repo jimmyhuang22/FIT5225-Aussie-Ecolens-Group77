@@ -36,6 +36,8 @@ Use this checklist while executing and demoing the Phase 3 ML inference service.
 | Inference local — bad image source | `POST /inference` with `{"image": {}}` | `422` Pydantic validation error |
 | Inference local — multiple image fields | `POST /inference` with both `gcs_uri` and `url` set | `422` (XOR rule) |
 | Cloud Run health smoke | `curl <service-url>/health` | `200` with `auth_mode:"api_key"` |
+| Cloud Run timeout setting | Cloud Run service detail page or `gcloud run services describe ... --format='value(spec.template.spec.timeoutSeconds)'` | `300` seconds |
+| Cloud Run demo warm instance | Cloud Run service detail page or `gcloud run services describe ... --format='value(spec.template.metadata.annotations.autoscaling.knative.dev/minScale)'` before live demo | `1` during demo window, then reset to `0` after demo |
 | Cloud Run inference smoke (missing key) | `curl -X POST <service-url>/inference -H "Content-Type: application/json" -d '{"image":{"url":"https://example/sample.jpg"}}'` | `401` with `invalid_inference_api_key` |
 | Cloud Run inference smoke (valid key) | `curl -X POST <service-url>/inference -H "X-Inference-Api-Key: <redacted>" -H "Content-Type: application/json" -d '{"image":{"url":"https://example/sample.jpg"}}'` | `200` if models are loaded and the image is fetchable, or a documented image-fetch/model readiness error |
 | Cloud Run logs | Cloud Logging viewer filtered to the inference service | "Loading MegaDetector" / "Loading SpeciesNet" / "Inference service ready" startup lines + per-request access log |
@@ -57,7 +59,8 @@ Save the JSONL file as Phase 3 evidence. **Do not commit it** unless the team ex
 
 ## Cloud Run Configuration Screenshots
 
-- [ ] Cloud Run service detail page showing memory `4Gi`, CPU `2`, concurrency `4`, max-instances `3`, `--allow-unauthenticated`, startup-cpu-boost ON.
+- [ ] Cloud Run service detail page showing memory `4Gi`, CPU `2`, concurrency `4`, timeout `300s`, max-instances `3`, `--allow-unauthenticated`, startup-cpu-boost ON.
+- [ ] During the live demo window, Cloud Run service detail page or `gcloud` output showing min-instances `1`; after the demo, evidence that it was reset to `0`.
 - [ ] Service account binding panel (Cloud Run uses `aussie-ecolens-inference-sa@...`).
 - [ ] Service account IAM page showing `roles/storage.objectViewer` on `gs://aussie-ecolens-models`.
 - [ ] Cloud Run env vars/secrets panel listing every `MODEL_*`, `INFERENCE_AUTH_MODE=api_key`, Secret Manager-backed `INFERENCE_API_KEY`, and `LOG_LEVEL=INFO`.

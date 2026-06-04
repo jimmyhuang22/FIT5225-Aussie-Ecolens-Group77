@@ -196,19 +196,40 @@ same value in AWS SSM Parameter Store and pass its name to SAM as
 
 ## Cloud Run Sizing
 
-Locked flag set used by `deploy-cloudrun.sh`:
+Default flag set used by `deploy-cloudrun.sh`:
 
 | Flag | Value | Reason |
 |------|-------|--------|
-| `--min-instances` | 0 | Avoids idle Cloud Run instance charges |
+| `--min-instances` | 0 normally; 1 during live demo | Avoids idle Cloud Run instance charges during normal development; keeps one warm instance ready for demo |
 | `--memory` | 4Gi | PyTorch + MegaDetector + SpeciesNet need headroom during cold start |
 | `--cpu` | 2 | Keeps inference under ~10 s on CPU |
 | `--concurrency` | 4 | Single model in memory; 4 concurrent requests share it |
 | `--max-instances` | 3 | Cost cap for the student account |
+| `--timeout` | 300s | Allows Cloud Run cold start + model loading to outlast the AWS 90s inference caller timeout |
 | `--startup-cpu-boost` | enabled | Faster model load on cold start |
 | `--allow-unauthenticated` | enabled | AWS Lambda can call Cloud Run without Google IAM token minting |
 | `INFERENCE_AUTH_MODE=api_key` | enabled | `/inference` requires `X-Inference-Api-Key` |
 | `INFERENCE_API_KEY_SECRET` | preferred | Cloud Run reads the key from Secret Manager instead of command-line env vars |
+
+For live demos, redeploy with one warm instance and the longer platform timeout:
+
+```bash
+CLOUD_RUN_MIN_INSTANCES=1 CLOUD_RUN_TIMEOUT_SECONDS=300 \
+  bash services/inference/scripts/deploy-cloudrun.sh
+```
+
+Then prewarm the service before showing the AWS upload flow:
+
+```bash
+curl "${CLOUD_RUN_URL}/health"
+curl -X POST "${CLOUD_RUN_URL}/inference" \
+  -H "X-Inference-Api-Key: <redacted>" \
+  -H "Content-Type: application/json" \
+  -d '{"image":{"url":"https://example/sample.jpg"}}'
+```
+
+After the demo, redeploy with `CLOUD_RUN_MIN_INSTANCES=0` to stop idle instance
+charges.
 
 ## Safety
 

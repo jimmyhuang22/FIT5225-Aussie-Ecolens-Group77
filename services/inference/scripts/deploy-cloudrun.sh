@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy the inference container to Cloud Run with the locked flag set.
+# Deploy the inference container to Cloud Run with the default flag set.
 #
 # BILLABLE: Cloud Run runtime + egress. For the assignment integration path, the
 # service is public at Cloud Run but requires X-Inference-Api-Key on /inference.
@@ -17,6 +17,9 @@
 #   MODEL_BUCKET     (default: aussie-ecolens-models)
 #   MODEL_VERSION    (default: v1)
 #   INFERENCE_SA     (default: aussie-ecolens-inference-sa)
+#   CLOUD_RUN_TIMEOUT_SECONDS (default: 300)
+#   CLOUD_RUN_MIN_INSTANCES   (default: 0; use 1 during live demo)
+#   CLOUD_RUN_MAX_INSTANCES   (default: 3)
 #   INFERENCE_API_KEY        (required unless INFERENCE_API_KEY_SECRET is set)
 #   INFERENCE_API_KEY_SECRET (optional Secret Manager secret name)
 
@@ -39,17 +42,21 @@ Env overrides:
   MODEL_BUCKET     (default: aussie-ecolens-models)
   MODEL_VERSION    (default: v1)
   INFERENCE_SA     (default: aussie-ecolens-inference-sa)
+  CLOUD_RUN_TIMEOUT_SECONDS (default: 300)
+  CLOUD_RUN_MIN_INSTANCES   (default: 0; use 1 during live demo)
+  CLOUD_RUN_MAX_INSTANCES   (default: 3)
   INFERENCE_API_KEY        (required unless INFERENCE_API_KEY_SECRET is set)
   INFERENCE_API_KEY_SECRET (optional Secret Manager secret name)
 
-Locked flag set:
+Default flag set:
   --region australia-southeast1
   --allow-unauthenticated
   --memory 4Gi
   --cpu 2
   --concurrency 4
-  --max-instances 3
-  --timeout 60
+  --max-instances ${CLOUD_RUN_MAX_INSTANCES:-3}
+  --min-instances ${CLOUD_RUN_MIN_INSTANCES:-0}
+  --timeout ${CLOUD_RUN_TIMEOUT_SECONDS:-300}
   --cpu-boost
   --port 8080
 
@@ -69,8 +76,10 @@ Prerequisites:
   3. build-image.sh
 
 Billable: Cloud Run runtime + egress. Costs depend on traffic and cold-start
-frequency. max-instances=3 caps blast radius. Keep the service min-instances at
-0 to avoid idle CPU/memory charges.
+frequency. max-instances defaults to 3 to cap blast radius. min-instances
+defaults to 0 to avoid idle CPU/memory charges; set CLOUD_RUN_MIN_INSTANCES=1
+before a live demo, prewarm /health and one small /inference request, then set it
+back to 0 afterwards.
 USAGE
   exit 0
 fi
@@ -85,6 +94,9 @@ BUCKET="${MODEL_BUCKET:-aussie-ecolens-models}"
 MODEL_VERSION="${MODEL_VERSION:-v1}"
 SA_NAME="${INFERENCE_SA:-aussie-ecolens-inference-sa}"
 SA_EMAIL="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
+CLOUD_RUN_TIMEOUT_SECONDS="${CLOUD_RUN_TIMEOUT_SECONDS:-300}"
+CLOUD_RUN_MIN_INSTANCES="${CLOUD_RUN_MIN_INSTANCES:-0}"
+CLOUD_RUN_MAX_INSTANCES="${CLOUD_RUN_MAX_INSTANCES:-3}"
 API_KEY="${INFERENCE_API_KEY:-}"
 API_KEY_SECRET="${INFERENCE_API_KEY_SECRET:-}"
 
@@ -106,6 +118,9 @@ cat <<BANNER
  Image:   ${FULL}
  SA:      ${SA_EMAIL}
  Models:  ${PREFIX}/
+ Timeout: ${CLOUD_RUN_TIMEOUT_SECONDS}s
+ Min inst: ${CLOUD_RUN_MIN_INSTANCES}
+ Max inst: ${CLOUD_RUN_MAX_INSTANCES}
  NOTE: Billable. Verifies prerequisites have run first.
 ============================================================
 BANNER
@@ -160,9 +175,9 @@ gcloud run deploy "${SERVICE}" \
   --memory 4Gi \
   --cpu 2 \
   --concurrency 4 \
-  --max-instances 3 \
-  --min-instances 0 \
-  --timeout 60 \
+  --max-instances "${CLOUD_RUN_MAX_INSTANCES}" \
+  --min-instances "${CLOUD_RUN_MIN_INSTANCES}" \
+  --timeout "${CLOUD_RUN_TIMEOUT_SECONDS}" \
   --cpu-boost \
   --port 8080 \
   --set-env-vars "${COMMON_ENV_VARS}" \

@@ -293,19 +293,22 @@ Primary contract docs:
 2. Sign up with an email address.
 3. Confirm the Cognito email verification code.
 4. Sign in.
-5. Upload a test image such as `Alectura_lathami_1.JPG`.
-6. Wait until the media status becomes `processed`.
-7. Confirm that the thumbnail, tags, model version, and media URLs are shown.
-8. Search by a detected tag.
-9. Run a multi-tag/count search if the media has multiple tags.
-10. Use image query-by-file and confirm the temporary query image is not listed as
+5. Before the live upload path, prewarm Cloud Run with `GET /health` and one
+   small authenticated `/inference` request. For demos, deploy with
+   `CLOUD_RUN_MIN_INSTANCES=1 CLOUD_RUN_TIMEOUT_SECONDS=300` first.
+6. Upload a test image such as `Alectura_lathami_1.JPG`.
+7. Wait until the media status becomes `processed`.
+8. Confirm that the thumbnail, tags, model version, and media URLs are shown.
+9. Search by a detected tag.
+10. Run a multi-tag/count search if the media has multiple tags.
+11. Use image query-by-file and confirm the temporary query image is not listed as
     stored media.
-11. Upload or inspect a 3-8 second video and confirm it has a first-frame
+12. Upload or inspect a 3-8 second video and confirm it has a first-frame
     thumbnail and sampled-frame tags. Avoid long videos in the live demo unless
     you are intentionally showing the visible timeout/failure path.
-12. Add and remove manual tags on selected media.
-13. Delete selected media through the UI and confirm it disappears from the list.
-14. Create two subscriptions with different tags, confirm both SNS emails, then
+13. Add and remove manual tags on selected media.
+14. Delete selected media through the UI and confirm it disappears from the list.
+15. Create two subscriptions with different tags, confirm both SNS emails, then
     upload matching media to prove filter-policy delivery.
 
 ## Verification Commands

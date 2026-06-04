@@ -235,6 +235,114 @@ class HandlerErrorHandlingTest(unittest.TestCase):
             {"routeKey": ["user-1#felis_catus", "user-2#felis_catus"]},
         )
 
+    def test_delete_media_item_hard_deletes_media_record(self) -> None:
+        class RecordingS3:
+            def __init__(self) -> None:
+                self.deleted: list[dict[str, str]] = []
+
+            def delete_object(self, **kwargs: str) -> None:
+                self.deleted.append(kwargs)
+
+        class HardDeleteMediaTable:
+            def __init__(self) -> None:
+                self.deleted: list[dict[str, Any]] = []
+
+            def delete_item(self, **kwargs: Any) -> None:
+                self.deleted.append(kwargs)
+
+            def update_item(self, **_kwargs: Any) -> None:
+                raise AssertionError("media delete must remove the DynamoDB item")
+
+        class RecordingDedupTable:
+            def __init__(self) -> None:
+                self.deleted: list[dict[str, Any]] = []
+
+            def delete_item(self, **kwargs: Any) -> None:
+                self.deleted.append(kwargs)
+
+        original_s3 = self.app.s3
+        original_media_table = self.app.media_table
+        original_dedup_table = self.app.dedup_table
+        fake_s3 = RecordingS3()
+        fake_media_table = HardDeleteMediaTable()
+        fake_dedup_table = RecordingDedupTable()
+        self.app.s3 = fake_s3
+        self.app.media_table = fake_media_table
+        self.app.dedup_table = fake_dedup_table
+        item = {
+            "mediaId": "media-1",
+            "ownerSub": "user-1",
+            "storageBucket": "media-bucket",
+            "storageObject": "uploads/user-1/media-1/original.jpg",
+            "thumbnailObject": "thumbnails/user-1/media-1.jpg",
+            "ownerChecksumKey": "user-1#abc123",
+        }
+        try:
+            result = self.app._delete_media_item(item)
+        finally:
+            self.app.s3 = original_s3
+            self.app.media_table = original_media_table
+            self.app.dedup_table = original_dedup_table
+
+        self.assertEqual(
+            fake_s3.deleted,
+            [
+                {
+                    "Bucket": "media-bucket",
+                    "Key": "uploads/user-1/media-1/original.jpg",
+                },
+                {"Bucket": "media-bucket", "Key": "thumbnails/user-1/media-1.jpg"},
+            ],
+        )
+        self.assertEqual(
+            fake_media_table.deleted,
+            [
+                {
+                    "Key": {"mediaId": "media-1"},
+                    "ConditionExpression": "ownerSub = :ownerSub",
+                    "ExpressionAttributeValues": {":ownerSub": "user-1"},
+                }
+            ],
+        )
+        self.assertEqual(
+            fake_dedup_table.deleted,
+            [
+                {
+                    "Key": {"ownerChecksumKey": "user-1#abc123"},
+                    "ConditionExpression": "mediaId = :mediaId",
+                    "ExpressionAttributeValues": {":mediaId": "media-1"},
+                }
+            ],
+        )
+        self.assertEqual(
+            result,
+            {
+                "mediaId": "media-1",
+                "storageObject": "uploads/user-1/media-1/original.jpg",
+                "thumbnailObject": "thumbnails/user-1/media-1.jpg",
+            },
+        )
+
+    def test_load_owned_media_hides_legacy_soft_deleted_records(self) -> None:
+        class LegacySoftDeletedMediaTable:
+            def get_item(self, **_kwargs: Any) -> dict[str, Any]:
+                return {
+                    "Item": {
+                        "mediaId": "media-1",
+                        "ownerSub": "user-1",
+                        "status": "deleted",
+                        "deletedAt": "2026-06-04T00:00:00Z",
+                    }
+                }
+
+        original_media_table = self.app.media_table
+        self.app.media_table = LegacySoftDeletedMediaTable()
+        try:
+            with self.assertRaisesRegex(ValueError, "media item not found"):
+                self.app._load_owned_media(_event("GET", "/media/media-1"), "media-1")
+        finally:
+            self.app.media_table = original_media_table
+
 
 if __name__ == "__main__":
     unittest.main()

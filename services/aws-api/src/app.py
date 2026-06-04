@@ -435,23 +435,16 @@ def _delete_media_item(item: dict[str, Any]) -> dict[str, Any]:
         s3.delete_object(Bucket=bucket, Key=item["storageObject"])
     if item.get("thumbnailObject") and item.get("thumbnailObject") != item.get("storageObject"):
         s3.delete_object(Bucket=bucket, Key=item["thumbnailObject"])
-    now = _now()
-    media_table.update_item(
+    media_table.delete_item(
         Key={"mediaId": item["mediaId"]},
-        UpdateExpression="SET deletedAt = :deletedAt, updatedAt = :updatedAt, #s = :status",
-        ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={
-            ":deletedAt": now,
-            ":updatedAt": now,
-            ":status": "deleted",
-        },
+        ConditionExpression="ownerSub = :ownerSub",
+        ExpressionAttributeValues={":ownerSub": item["ownerSub"]},
     )
     _delete_dedup_for_media(item)
     return {
         "mediaId": item["mediaId"],
         "storageObject": item.get("storageObject"),
         "thumbnailObject": item.get("thumbnailObject"),
-        "deletedAt": now,
     }
 
 
@@ -677,6 +670,8 @@ def _load_owned_media(event: dict[str, Any], media_id: str) -> dict[str, Any]:
         raise ValueError("media item not found")
     if item.get("ownerSub") != owner_sub:
         raise PermissionError()
+    if item.get("deletedAt") or item.get("status") == "deleted":
+        raise ValueError("media item not found")
     return item
 
 

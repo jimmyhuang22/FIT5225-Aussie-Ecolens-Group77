@@ -70,7 +70,8 @@ paths:
                 $ref: "#/components/schemas/MediaResponse"
   /media:
     get:
-      summary: List the caller's media, optionally filtered by tag count.
+      summary: List accessible media, optionally filtered by tag count.
+      description: Returns media owned by the caller plus media other users explicitly marked as shared.
       parameters:
         - name: tag
           in: query
@@ -90,7 +91,7 @@ paths:
                 $ref: "#/components/schemas/MediaListResponse"
   /media/{mediaId}:
     get:
-      summary: Get one media item.
+      summary: Get one accessible media item.
       parameters:
         - $ref: "#/components/parameters/MediaId"
       responses:
@@ -111,6 +112,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteMediaResponse"
+  /media/{mediaId}/sharing:
+    patch:
+      summary: Update owner-controlled sharing settings.
+      description: Only the owner can change sharing. Shared media can be viewed by registered users; allowTagEdit lets registered users edit tags.
+      parameters:
+        - $ref: "#/components/parameters/MediaId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility:
+                  type: string
+                  enum: [private, shared]
+                allowTagEdit:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Updated media record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaResponse"
   /media/delete:
     post:
       summary: Bulk delete owned media by URL or object references.
@@ -185,7 +213,8 @@ paths:
                 $ref: "#/components/schemas/MediaQueryResponse"
   /media/tags/bulk:
     post:
-      summary: Add or remove tags on multiple owned media records.
+      summary: Add or remove tags on multiple editable media records.
+      description: Owners can always edit tags; other registered users can edit shared media only when allowTagEdit is true.
       requestBody:
         required: true
         content:
@@ -224,7 +253,7 @@ paths:
                       $ref: "#/components/schemas/MediaItem"
   /media/query/thumbnail:
     post:
-      summary: Resolve an owned image thumbnail URL to the original image URL.
+      summary: Resolve an accessible image thumbnail URL to the original image URL.
       requestBody:
         required: true
         content:
@@ -405,6 +434,13 @@ components:
         thumbnailObject:
           type: string
           nullable: true
+        visibility:
+          type: string
+          enum: [private, shared]
+          default: private
+        allowTagEdit:
+          type: boolean
+          default: false
         processingError:
           type: string
           nullable: true

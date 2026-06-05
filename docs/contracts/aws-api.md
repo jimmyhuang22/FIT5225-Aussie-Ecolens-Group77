@@ -138,7 +138,8 @@ Success:
 
 ### `GET /media`
 
-Lists media owned by the authenticated user.
+Lists media accessible to the authenticated user: records they own plus records
+other users have explicitly marked as `visibility=shared`.
 The API returns fresh presigned `originalUrl` and `thumbnailUrl` values on each
 read so old browser sessions do not keep using expired S3 URLs.
 
@@ -167,6 +168,8 @@ Success:
       "processingError": null,
       "originalUrl": "https://...",
       "thumbnailUrl": "https://...",
+      "visibility": "private",
+      "allowTagEdit": false,
       "createdAt": "2026-05-24T01:00:00Z",
       "updatedAt": "2026-05-24T01:00:10Z"
     }
@@ -176,7 +179,36 @@ Success:
 
 ### `GET /media/{mediaId}`
 
-Returns one owned media record.
+Returns one accessible media record. Owned media is always accessible; media
+owned by another user is accessible only when its `visibility` is `shared`.
+
+### `PATCH /media/{mediaId}/sharing`
+
+Updates owner-controlled sharing settings. Only the media owner can call this
+endpoint. Shared media can be viewed by other registered users. When
+`allowTagEdit` is true, other registered users can also add or remove manual
+tags on that media. Delete remains owner-only.
+
+Request:
+
+```json
+{
+  "visibility": "shared",
+  "allowTagEdit": true
+}
+```
+
+Success:
+
+```json
+{
+  "media": {
+    "mediaId": "media_abc123",
+    "visibility": "shared",
+    "allowTagEdit": true
+  }
+}
+```
 
 ### `POST /media/query/tags`
 
@@ -246,10 +278,11 @@ Success:
 ### `POST /media/query/thumbnail`
 
 Resolves an image thumbnail URL or thumbnail object key to the original image
-URL. This endpoint is limited to media owned by the authenticated user and to
-image media records.
+URL. This endpoint is limited to image media records accessible to the
+authenticated user.
 
-把图片 thumbnail URL 或 thumbnail object key 解析为原始图片 URL。该接口只返回当前认证用户拥有的 image 记录。
+把图片 thumbnail URL 或 thumbnail object key 解析为原始图片 URL。该接口只返回当前认证用户可访问的 image 记录：
+自己拥有的媒体，或其他用户显式 shared 的媒体。
 
 Request:
 
@@ -272,10 +305,14 @@ Success:
 
 ### `POST /media/tags/bulk`
 
-Adds or removes manual tags on owned media records. The endpoint accepts
-`mediaIds` and also supports URL/object references through `urls`.
+Adds or removes manual tags on media records the caller can edit. Owners can
+always edit tags. Other registered users can edit tags only when the owner has
+set `visibility=shared` and `allowTagEdit=true`. The endpoint accepts `mediaIds`
+and also supports URL/object references through `urls`.
 
-对当前用户拥有的媒体批量添加或删除手动 tags。接口接受 `mediaIds`，也支持通过 `urls` 传 URL/object 引用。
+对调用者有编辑权限的媒体批量添加或删除手动 tags。Owner 永远可以编辑；其他注册用户只有在 owner 设置
+`visibility=shared` 且 `allowTagEdit=true` 后才能编辑。接口接受 `mediaIds`，也支持通过 `urls`
+传 URL/object 引用。
 
 Request:
 

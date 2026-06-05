@@ -675,10 +675,6 @@ export function MediaPage() {
                   <p className="mx-auto mt-1 max-w-md text-sm">
                     Upload an image or video to start species detection, then results and tags will appear in this panel.
                   </p>
-                  <Button type="button" className="mt-5" onClick={() => setActiveTool("upload")}>
-                    <ImageUp />
-                    Go to upload
-                  </Button>
                 </div>
               )}
             </div>

@@ -45,6 +45,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ApiError,
   bulkDeleteMedia,
@@ -77,6 +78,7 @@ type DeleteTarget =
   | { kind: "bulk" }
   | { kind: "subscription"; subscriptionId: string }
   | null;
+type ToolTab = "upload" | "search" | "manage" | "notify";
 
 const PENDING_MEDIA_STATUSES = new Set(["upload_url_issued", "uploaded", "processing"]);
 
@@ -139,10 +141,10 @@ function toneToAlert(tone: NonNullable<Notice>["tone"]): "default" | "destructiv
 
 function MetricCard({ label, value }: { label: string; value: number }) {
   return (
-    <Card>
-      <CardContent className="p-5">
+    <Card className="bg-white/85">
+      <CardContent className="flex items-center justify-between gap-3 p-4">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="mt-2 text-3xl font-bold tracking-tight text-emerald-950">{value}</p>
+        <p className="text-2xl font-bold tracking-tight text-emerald-950">{value}</p>
       </CardContent>
     </Card>
   );
@@ -166,6 +168,7 @@ export function MediaPage() {
   const [notice, setNotice] = useState<Notice>(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTool, setActiveTool] = useState<ToolTab>("upload");
   const [subscriptionEmail, setSubscriptionEmail] = useState("");
   const [subscriptionTags, setSubscriptionTags] = useState("");
   const [tagCountQuery, setTagCountQuery] = useState("");
@@ -531,19 +534,23 @@ export function MediaPage() {
 
   return (
     <section className="workspace-page">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <Badge variant="secondary" className="mb-3">Multi-cloud serverless demo</Badge>
-          <h1 className="text-3xl font-bold tracking-tight text-emerald-950">Media workspace</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Signed in as {user?.username ?? "Cognito user"}</p>
+      <div className="rounded-3xl border bg-white/75 p-5 shadow-sm backdrop-blur">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <Badge variant="secondary" className="mb-2">Multi-cloud serverless demo</Badge>
+            <h1 className="text-2xl font-bold tracking-tight text-emerald-950 md:text-3xl">Media workspace</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Signed in as {user?.username ?? "Cognito user"}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
+              {loading ? <Loader2 className="animate-spin" /> : <RefreshCcw />}
+              Refresh
+            </Button>
+          </div>
         </div>
-        <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
-          {loading ? <Loader2 className="animate-spin" /> : <RefreshCcw />}
-          Refresh
-        </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Total media" value={items.length} />
         <MetricCard label="Processed" value={processedCount} />
         <MetricCard label="Unique tags" value={tagCount} />
@@ -556,269 +563,328 @@ export function MediaPage() {
         </Alert>
       )}
 
-      <div className="workspace-grid">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><ImageUp className="size-5" /> Upload</CardTitle>
-            <CardDescription>Upload image or short video media to S3.</CardDescription>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-gradient-to-r from-emerald-50 to-background p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-2xl">
+                  <FileImage className="size-6" />
+                  Results
+                </CardTitle>
+                <CardDescription>
+                  {items.length > 0
+                    ? `${items.length} ${pluralize(items.length, "media item")} loaded. ${selectedIds.length} selected.`
+                    : "Your media library will appear here after upload or search."}
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {loading && <Badge variant="secondary"><Loader2 className="mr-1 size-3 animate-spin" /> Loading</Badge>}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={selectedIds.length === 0}
+                  onClick={() => setDeleteTarget({ kind: "bulk" })}
+                >
+                  <Trash2 />
+                  {selectedIds.length > 0
+                    ? `Delete ${selectedIds.length} selected`
+                    : "Delete selected"}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={onUpload}>
-              <Field label="Image or video">
-                <Input type="file" accept="image/*,video/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-              </Field>
-              {file && (
-                <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-                  <p className="font-medium break-all">{file.name}</p>
-                  <p className="text-muted-foreground">{Math.max(file.size / 1024 / 1024, 0.01).toFixed(2)} MB</p>
-                </div>
-              )}
-              <Button className="w-full" type="submit" disabled={!file || uploading}>
-                {uploading ? <Loader2 className="animate-spin" /> : <ImageUp />}
-                {uploading ? "Uploading..." : "Upload"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Search className="size-5" /> Search</CardTitle>
-            <CardDescription>Find media containing one species tag.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={onSearch}>
-              <Field label="Tag">
-                <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="alectura_lathami" />
-              </Field>
-              <Button className="w-full" type="submit">Search</Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Tags className="size-5" /> Tag counts</CardTitle>
-            <CardDescription>Use AND semantics with minimum counts.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={onTagCountSearch}>
-              <Field label="Query">
-                <Input value={tagCountQuery} onChange={(event) => setTagCountQuery(event.target.value)} placeholder="dingo:2, cattle:1" />
-              </Field>
-              <Button className="w-full" type="submit">Query</Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><FileImage className="size-5" /> Query image</CardTitle>
-            <CardDescription>Analyze a temporary image without storing it.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={onQueryFile}>
-              <Field label="Image file">
-                <Input type="file" accept="image/*" onChange={(event) => setQueryFile(event.target.files?.[0] ?? null)} />
-              </Field>
-              <Button className="w-full" type="submit" disabled={!queryFile || loading}>Match</Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Thumbnail lookup</CardTitle>
-            <CardDescription>Resolve a thumbnail URL to its original image.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={onThumbnailUrlLookup}>
-              <Field label="Thumbnail URL">
-                <Input value={thumbnailLookupUrl} onChange={(event) => setThumbnailLookupUrl(event.target.value)} placeholder="https://..." type="url" />
-              </Field>
-              <Button className="w-full" type="submit" disabled={loading}>Find original</Button>
-              {thumbnailLookupResult && (
-                <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-                  <p className="font-medium">{shortId(thumbnailLookupResult.mediaId)}</p>
-                  {thumbnailLookupResult.originalUrl ? (
-                    <a href={thumbnailLookupResult.originalUrl} target="_blank" rel="noreferrer">Open original</a>
-                  ) : (
-                    <p className="break-all text-muted-foreground">{thumbnailLookupResult.storageObject}</p>
-                  )}
-                </div>
-              )}
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Bulk tags</CardTitle>
-            <CardDescription>Add or remove tags from selected media.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={onBulkUpdate}>
-              <Field label="Tags">
-                <Input value={bulkTags} onChange={(event) => setBulkTags(event.target.value)} placeholder="reviewed, demo" />
-              </Field>
-              <Field label="Operation">
-                <Select value={bulkOperation} onValueChange={(value) => setBulkOperation(value as "1" | "0")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Add</SelectItem>
-                    <SelectItem value="0">Remove</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Button className="w-full" type="submit">Apply tag change</Button>
-              <Separator />
-              <Button
-                className="w-full"
-                type="button"
-                variant="destructive"
-                disabled={selectedIds.length === 0}
-                onClick={() => setDeleteTarget({ kind: "bulk" })}
-              >
-                <Trash2 />
-                {selectedIds.length > 0
-                  ? `Delete ${selectedIds.length} selected ${pluralize(selectedIds.length, "media item")}`
-                  : "Delete selected media"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Bell className="size-5" /> Notifications</CardTitle>
-            <CardDescription>Subscribe to owner-scoped tag notifications.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={onCreateSubscription}>
-              <Field label="Email">
-                <Input value={subscriptionEmail} onChange={(event) => setSubscriptionEmail(event.target.value)} placeholder="name@example.com" type="email" />
-              </Field>
-              <Field label="Tags">
-                <Input value={subscriptionTags} onChange={(event) => setSubscriptionTags(event.target.value)} placeholder="alectura_lathami, felis_catus" />
-              </Field>
-              <Button className="w-full" type="submit">Subscribe</Button>
-            </form>
-
-            <div className="mt-5 space-y-3">
-              {subscriptions.map((subscription) => (
-                <div className="rounded-lg border p-3" key={subscription.subscriptionId}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <p className="break-all text-sm font-medium">{subscription.email}</p>
-                      <p className="break-all text-xs text-muted-foreground">{subscription.tags.join(", ")}</p>
-                      {subscription.snsStatus && <Badge variant="secondary">SNS: {subscription.snsStatus}</Badge>}
+          <CardContent className="p-4 sm:p-5">
+            <div className={items.length > 0 ? "max-h-[calc(100vh-18rem)] space-y-3 overflow-y-auto pr-1" : "space-y-3"}>
+              {items.map((item) => (
+                <article className="rounded-xl border bg-card p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md" key={item.mediaId}>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex min-w-0 gap-4">
+                      <Checkbox
+                        aria-label={`Select ${item.mediaId}`}
+                        checked={selectedIds.includes(item.mediaId)}
+                        onCheckedChange={() => toggleSelected(item.mediaId)}
+                        className="mt-1"
+                      />
+                      <div className="media-preview">
+                        {item.thumbnailUrl || (item.originalUrl && item.mediaType === "image") ? (
+                          <img src={item.thumbnailUrl || item.originalUrl || ""} alt={item.mediaId} />
+                        ) : (
+                          <span>{item.mediaType}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-emerald-950">{shortId(item.mediaId)}</h3>
+                          <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
+                          <Badge variant="outline">{item.mediaType}</Badge>
+                        </div>
+                        <p className="break-all text-sm text-muted-foreground">{item.storageObject}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(item.tagCounts || {}).length === 0 ? (
+                            <Badge variant="secondary">No tags yet</Badge>
+                          ) : (
+                            Object.entries(item.tagCounts || {}).map(([tagName, count]) => (
+                              <Badge variant="secondary" key={tagName}>{tagName} x{count}</Badge>
+                            ))
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Model: {item.modelVersion}</p>
+                        {item.status === "failed" && item.processingError && (
+                          <Alert variant="destructive" className="mt-2">
+                            <ShieldAlert className="size-4" />
+                            <AlertDescription>{item.processingError}</AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
                     </div>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget({ kind: "subscription", subscriptionId: subscription.subscriptionId })}>
-                      Remove
-                    </Button>
+
+                    <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+                      {item.originalUrl && (
+                        <Button asChild variant="outline" size="sm">
+                          <a href={item.originalUrl} target="_blank" rel="noreferrer"><ExternalLink /> Open</a>
+                        </Button>
+                      )}
+                      {item.thumbnailUrl && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Thumbnail", item.thumbnailUrl)}>
+                          <Copy /> Thumbnail
+                        </Button>
+                      )}
+                      {item.originalUrl && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Original", item.originalUrl)}>
+                          <Copy /> Original
+                        </Button>
+                      )}
+                      {item.mediaType === "image" && item.thumbnailUrl && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => void onThumbnailLookup(item)}>
+                          Lookup original
+                        </Button>
+                      )}
+                      <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTarget({ kind: "single", mediaId: item.mediaId })}>
+                        <Trash2 /> Delete
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                </article>
               ))}
-              {subscriptions.length === 0 && (
-                <div className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">No active subscriptions.</div>
+              {items.length === 0 && (
+                <div className="rounded-xl border border-dashed bg-muted/20 p-10 text-center text-muted-foreground">
+                  <FileImage className="mx-auto mb-3 size-10 opacity-50" />
+                  <p className="font-medium text-foreground">No media yet</p>
+                  <p className="mx-auto mt-1 max-w-md text-sm">
+                    Upload an image or video to start species detection, then results and tags will appear in this panel.
+                  </p>
+                  <Button type="button" className="mt-5" onClick={() => setActiveTool("upload")}>
+                    <ImageUp />
+                    Go to upload
+                  </Button>
+                </div>
               )}
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Results</CardTitle>
-            <CardDescription>
-              {selectedIds.length > 0 ? `${selectedIds.length} selected` : "Search and upload results appear here."}
-            </CardDescription>
-          </div>
-          {loading && <Badge variant="secondary"><Loader2 className="mr-1 size-3 animate-spin" /> Loading</Badge>}
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {items.map((item) => (
-              <article className="rounded-xl border bg-card p-4 shadow-sm" key={item.mediaId}>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="flex min-w-0 gap-4">
-                    <Checkbox
-                      aria-label={`Select ${item.mediaId}`}
-                      checked={selectedIds.includes(item.mediaId)}
-                      onCheckedChange={() => toggleSelected(item.mediaId)}
-                      className="mt-1"
-                    />
-                    <div className="media-preview">
-                      {item.thumbnailUrl || (item.originalUrl && item.mediaType === "image") ? (
-                        <img src={item.thumbnailUrl || item.originalUrl || ""} alt={item.mediaId} />
-                      ) : (
-                        <span>{item.mediaType}</span>
-                      )}
-                    </div>
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-emerald-950">{shortId(item.mediaId)}</h3>
-                        <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
-                        <Badge variant="outline">{item.mediaType}</Badge>
-                      </div>
-                      <p className="break-all text-sm text-muted-foreground">{item.storageObject}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(item.tagCounts || {}).length === 0 ? (
-                          <Badge variant="secondary">No tags yet</Badge>
-                        ) : (
-                          Object.entries(item.tagCounts || {}).map(([tagName, count]) => (
-                            <Badge variant="secondary" key={tagName}>{tagName} x{count}</Badge>
-                          ))
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">Model: {item.modelVersion}</p>
-                      {item.status === "failed" && item.processingError && (
-                        <Alert variant="destructive" className="mt-2">
-                          <ShieldAlert className="size-4" />
-                          <AlertDescription>{item.processingError}</AlertDescription>
-                        </Alert>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-                    {item.originalUrl && (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={item.originalUrl} target="_blank" rel="noreferrer"><ExternalLink /> Open</a>
-                      </Button>
-                    )}
-                    {item.thumbnailUrl && (
-                      <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Thumbnail", item.thumbnailUrl)}>
-                        <Copy /> Thumbnail
-                      </Button>
-                    )}
-                    {item.originalUrl && (
-                      <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Original", item.originalUrl)}>
-                        <Copy /> Original
-                      </Button>
-                    )}
-                    {item.mediaType === "image" && item.thumbnailUrl && (
-                      <Button type="button" variant="outline" size="sm" onClick={() => void onThumbnailLookup(item)}>
-                        Lookup original
-                      </Button>
-                    )}
-                    <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTarget({ kind: "single", mediaId: item.mediaId })}>
-                      <Trash2 /> Delete
-                    </Button>
-                  </div>
+        <aside className="space-y-4 xl:sticky xl:top-24">
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b bg-card/80 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Badge variant="secondary" className="mb-2">Workflow tools</Badge>
+                  <CardTitle>Actions</CardTitle>
+                  <CardDescription>
+                    Switch between upload, search, media management and notification tools.
+                  </CardDescription>
                 </div>
-              </article>
-            ))}
-            {items.length === 0 && (
-              <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-                <FileImage className="mx-auto mb-3 size-10 opacity-50" />
-                <p>No media found.</p>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-5">
+              <Tabs value={activeTool} onValueChange={(value) => setActiveTool(value as ToolTab)} className="w-full">
+                <TabsList className="grid h-auto w-full grid-cols-4 gap-1 p-1">
+                  <TabsTrigger value="upload" className="gap-2">
+                    <ImageUp className="size-4" />
+                    <span className="hidden sm:inline">Upload</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="search" className="gap-2">
+                    <Search className="size-4" />
+                    <span className="hidden sm:inline">Search</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="manage" className="gap-2">
+                    <Tags className="size-4" />
+                    <span className="hidden sm:inline">Manage</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="notify" className="gap-2">
+                    <Bell className="size-4" />
+                    <span className="hidden sm:inline">Notify</span>
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="upload" className="mt-5 space-y-5">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                      <ImageUp className="size-5" /> Upload media
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">Upload image or short video media to S3.</p>
+                  </div>
+                  <form className="space-y-4" onSubmit={onUpload}>
+                    <Field label="Image or video">
+                      <Input type="file" accept="image/*,video/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+                    </Field>
+                    {file && (
+                      <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+                        <p className="font-medium break-all">{file.name}</p>
+                        <p className="text-muted-foreground">{Math.max(file.size / 1024 / 1024, 0.01).toFixed(2)} MB</p>
+                      </div>
+                    )}
+                    <Button className="w-full" type="submit" disabled={!file || uploading}>
+                      {uploading ? <Loader2 className="animate-spin" /> : <ImageUp />}
+                      {uploading ? "Uploading..." : "Upload"}
+                    </Button>
+                  </form>
+                </TabsContent>
+
+                <TabsContent value="search" className="mt-5 space-y-6">
+                  <section className="space-y-4 rounded-xl border bg-background/70 p-4 shadow-sm">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                        <Search className="size-5" /> Search by tag
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">Find media containing one species tag.</p>
+                    </div>
+                    <form className="space-y-4" onSubmit={onSearch}>
+                      <Field label="Tag">
+                        <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="alectura_lathami" />
+                      </Field>
+                      <Button className="w-full" type="submit">Search</Button>
+                    </form>
+                  </section>
+
+                  <Separator />
+
+                  <section className="space-y-4 rounded-xl border bg-background/70 p-4 shadow-sm">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                        <Tags className="size-5" /> Tag counts
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">Use AND semantics with minimum counts.</p>
+                    </div>
+                    <form className="space-y-4" onSubmit={onTagCountSearch}>
+                      <Field label="Query">
+                        <Input value={tagCountQuery} onChange={(event) => setTagCountQuery(event.target.value)} placeholder="dingo:2, cattle:1" />
+                      </Field>
+                      <Button className="w-full" type="submit">Query</Button>
+                    </form>
+                  </section>
+
+                  <Separator />
+
+                  <section className="space-y-4 rounded-xl border bg-background/70 p-4 shadow-sm">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                        <FileImage className="size-5" /> Query image
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">Analyze a temporary image without storing it.</p>
+                    </div>
+                    <form className="space-y-4" onSubmit={onQueryFile}>
+                      <Field label="Image file">
+                        <Input type="file" accept="image/*" onChange={(event) => setQueryFile(event.target.files?.[0] ?? null)} />
+                      </Field>
+                      <Button className="w-full" type="submit" disabled={!queryFile || loading}>Match</Button>
+                    </form>
+                  </section>
+
+                  <Separator />
+
+                  <section className="space-y-4 rounded-xl border bg-background/70 p-4 shadow-sm">
+                    <div>
+                      <h2 className="text-lg font-semibold text-emerald-950">Thumbnail lookup</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">Resolve a thumbnail URL to its original image.</p>
+                    </div>
+                    <form className="space-y-4" onSubmit={onThumbnailUrlLookup}>
+                      <Field label="Thumbnail URL">
+                        <Input value={thumbnailLookupUrl} onChange={(event) => setThumbnailLookupUrl(event.target.value)} placeholder="https://..." type="url" />
+                      </Field>
+                      <Button className="w-full" type="submit" disabled={loading}>Find original</Button>
+                      {thumbnailLookupResult && (
+                        <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+                          <p className="font-medium">{shortId(thumbnailLookupResult.mediaId)}</p>
+                          {thumbnailLookupResult.originalUrl ? (
+                            <a href={thumbnailLookupResult.originalUrl} target="_blank" rel="noreferrer">Open original</a>
+                          ) : (
+                            <p className="break-all text-muted-foreground">{thumbnailLookupResult.storageObject}</p>
+                          )}
+                        </div>
+                      )}
+                    </form>
+                  </section>
+                </TabsContent>
+
+                <TabsContent value="manage" className="mt-5 space-y-5">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                      <Tags className="size-5" /> Bulk tags
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">Add or remove tags from selected media.</p>
+                  </div>
+                  <form className="space-y-4" onSubmit={onBulkUpdate}>
+                    <Field label="Tags">
+                      <Input value={bulkTags} onChange={(event) => setBulkTags(event.target.value)} placeholder="reviewed, demo" />
+                    </Field>
+                    <Field label="Operation">
+                      <Select value={bulkOperation} onValueChange={(value) => setBulkOperation(value as "1" | "0")}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Add</SelectItem>
+                          <SelectItem value="0">Remove</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Button className="w-full" type="submit">Apply tag change</Button>
+                  </form>
+                </TabsContent>
+
+                <TabsContent value="notify" className="mt-5 space-y-5">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                      <Bell className="size-5" /> Notifications
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">Subscribe to owner-scoped tag notifications.</p>
+                  </div>
+                  <form className="space-y-4" onSubmit={onCreateSubscription}>
+                    <Field label="Email">
+                      <Input value={subscriptionEmail} onChange={(event) => setSubscriptionEmail(event.target.value)} placeholder="name@example.com" type="email" />
+                    </Field>
+                    <Field label="Tags">
+                      <Input value={subscriptionTags} onChange={(event) => setSubscriptionTags(event.target.value)} placeholder="alectura_lathami, felis_catus" />
+                    </Field>
+                    <Button className="w-full" type="submit">Subscribe</Button>
+                  </form>
+
+                  <div className="space-y-3">
+                    {subscriptions.map((subscription) => (
+                      <div className="rounded-lg border p-3" key={subscription.subscriptionId}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <p className="break-all text-sm font-medium">{subscription.email}</p>
+                            <p className="break-all text-xs text-muted-foreground">{subscription.tags.join(", ")}</p>
+                            {subscription.snsStatus && <Badge variant="secondary">SNS: {subscription.snsStatus}</Badge>}
+                          </div>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget({ kind: "subscription", subscriptionId: subscription.subscriptionId })}>
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {subscriptions.length === 0 && (
+                      <div className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">No active subscriptions.</div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

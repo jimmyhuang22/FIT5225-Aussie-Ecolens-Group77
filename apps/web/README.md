@@ -58,8 +58,8 @@ The Vite dev server binds to `http://localhost:5173`, which matches the API serv
 
 ## Demo Flow
 
-1. Open `http://localhost:5173`. Unauthenticated visitors are redirected to `/sign-in`.
-2. Click "Sign Up". Fill email + first name + last name + password.
+1. Open `http://localhost:5173`. Unauthenticated visitors are redirected to `/sign-up`.
+2. Fill email + first name + last name + password.
 3. Receive the 6-digit verification code by email; enter it on `/confirm-sign-up`.
 4. Sign in at `/sign-in`.
 5. Land on `/profile`, which calls `GET /api/me` with the Cognito access token and renders the user object.
@@ -81,7 +81,7 @@ Capture for the report/demo folder (redact emails and JWTs before sharing):
 - [ ] Profile page rendering the `user` object from `/api/me`.
 - [ ] Browser DevTools network tab showing `Authorization: Bearer <REDACTED>` on the `/api/me` request.
 - [ ] Sign Out clicked; redirect to `/sign-in`.
-- [ ] Direct visit to `/profile` after sign-out — redirect to `/sign-in`.
+- [ ] Direct visit to `/profile` after sign-out — redirect to `/sign-up`.
 
 ## Scripts
 

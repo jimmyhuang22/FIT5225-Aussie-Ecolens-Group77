@@ -15,7 +15,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     // to register a new account". Sign-in is reachable via the link on /sign-up.
     return (
       <Navigate
-        to="/sign-in"
+        to="/sign-up"
         replace
         state={{ from: location.pathname }}
       />

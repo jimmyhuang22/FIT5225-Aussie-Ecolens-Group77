@@ -527,6 +527,146 @@ class HandlerErrorHandlingTest(unittest.TestCase):
             self.app.urllib.request.urlopen = original_urlopen
             self.app.INFERENCE_ENDPOINT_URL = original_endpoint
 
+    def test_owner_can_enable_shared_media_tag_edit(self) -> None:
+        class SharingMediaTable:
+            def __init__(self) -> None:
+                self.updated: list[dict[str, Any]] = []
+
+            def get_item(self, **_kwargs: Any) -> dict[str, Any]:
+                return {
+                    "Item": {
+                        "mediaId": "media-1",
+                        "ownerSub": "user-1",
+                        "status": "processed",
+                    }
+                }
+
+            def update_item(self, **kwargs: Any) -> None:
+                self.updated.append(kwargs)
+
+        original_media_table = self.app.media_table
+        fake_media_table = SharingMediaTable()
+        self.app.media_table = fake_media_table
+        try:
+            response = self.app.handler(
+                _event(
+                    "PATCH",
+                    "/media/media-1/sharing",
+                    json.dumps({"visibility": "shared", "allowTagEdit": True}),
+                ),
+                None,
+            )
+        finally:
+            self.app.media_table = original_media_table
+
+        self.assertEqual(response["statusCode"], 200)
+        media = json.loads(response["body"])["media"]
+        self.assertEqual(media["visibility"], "shared")
+        self.assertTrue(media["allowTagEdit"])
+        self.assertEqual(
+            fake_media_table.updated[0]["ExpressionAttributeValues"][":ownerSub"],
+            "user-1",
+        )
+
+    def test_accessible_media_includes_owned_and_shared_items(self) -> None:
+        class AccessibleMediaTable:
+            def query(self, **kwargs: Any) -> dict[str, Any]:
+                index_name = kwargs.get("IndexName")
+                expression = kwargs.get("KeyConditionExpression")
+                if index_name == "ownerSub-createdAt-index":
+                    if expression != ("eq", "ownerSub", "user-1"):
+                        raise AssertionError(f"unexpected owner expression: {expression}")
+                    return {
+                        "Items": [
+                            {
+                                "mediaId": "owned-1",
+                                "ownerSub": "user-1",
+                                "createdAt": "2026-06-05T00:00:00Z",
+                            }
+                        ]
+                    }
+                if index_name == "visibility-createdAt-index":
+                    if expression != ("eq", "visibility", "shared"):
+                        raise AssertionError(f"unexpected visibility expression: {expression}")
+                    return {
+                        "Items": [
+                            {
+                                "mediaId": "shared-1",
+                                "ownerSub": "user-2",
+                                "visibility": "shared",
+                                "createdAt": "2026-06-06T00:00:00Z",
+                            }
+                        ]
+                    }
+                raise AssertionError(f"unexpected index: {index_name}")
+
+        original_media_table = self.app.media_table
+        self.app.media_table = AccessibleMediaTable()
+        try:
+            items = self.app._query_accessible_media("user-1", {})
+        finally:
+            self.app.media_table = original_media_table
+
+        self.assertEqual([item["mediaId"] for item in items], ["shared-1", "owned-1"])
+        self.assertEqual(items[0]["visibility"], "shared")
+        self.assertFalse(items[0]["allowTagEdit"])
+        self.assertEqual(items[1]["visibility"], "private")
+
+    def test_shared_media_tag_edit_requires_owner_opt_in(self) -> None:
+        class SharedMediaTable:
+            def __init__(self, allow_tag_edit: bool) -> None:
+                self.allow_tag_edit = allow_tag_edit
+                self.updated: list[dict[str, Any]] = []
+
+            def query(self, **kwargs: Any) -> dict[str, Any]:
+                if kwargs.get("IndexName") == "ownerSub-createdAt-index":
+                    return {"Items": []}
+                if kwargs.get("IndexName") == "visibility-createdAt-index":
+                    return {
+                        "Items": [
+                            {
+                                "mediaId": "shared-1",
+                                "ownerSub": "user-2",
+                                "visibility": "shared",
+                                "allowTagEdit": self.allow_tag_edit,
+                                "tags": [],
+                                "tagCounts": {},
+                                "createdAt": "2026-06-06T00:00:00Z",
+                            }
+                        ]
+                    }
+                raise AssertionError("unexpected media query")
+
+            def update_item(self, **kwargs: Any) -> None:
+                self.updated.append(kwargs)
+
+        body = json.dumps(
+            {"mediaIds": ["shared-1"], "tags": ["reviewed"], "operation": 1}
+        )
+        original_media_table = self.app.media_table
+        denied_table = SharedMediaTable(False)
+        self.app.media_table = denied_table
+        try:
+            denied = self.app.handler(_event("POST", "/media/tags/bulk", body), None)
+        finally:
+            self.app.media_table = original_media_table
+
+        self.assertEqual(denied["statusCode"], 403)
+        self.assertEqual(denied_table.updated, [])
+
+        allowed_table = SharedMediaTable(True)
+        self.app.media_table = allowed_table
+        try:
+            allowed = self.app.handler(_event("POST", "/media/tags/bulk", body), None)
+        finally:
+            self.app.media_table = original_media_table
+
+        self.assertEqual(allowed["statusCode"], 200)
+        self.assertEqual(len(allowed_table.updated), 1)
+        updated = json.loads(allowed["body"])["updated"][0]
+        self.assertEqual(updated["mediaId"], "shared-1")
+        self.assertEqual(updated["tags"], ["reviewed"])
+
 
 if __name__ == "__main__":
     unittest.main()

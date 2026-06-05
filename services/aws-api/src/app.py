@@ -48,6 +48,8 @@ ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_VIDEO_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm"}
+VISIBILITY_PRIVATE = "private"
+VISIBILITY_SHARED = "shared"
 
 LOG = logging.getLogger(__name__)
 
@@ -87,6 +89,8 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             return _bulk_update_tags(event)
         if method == "POST" and path == "/media/delete":
             return _bulk_delete_media(event)
+        if method == "PATCH" and path.startswith("/media/") and path.endswith("/sharing"):
+            return _update_media_sharing(event, path.split("/")[2])
         if method == "GET" and path.startswith("/media/"):
             return _get_media(event, path.split("/")[2])
         if method == "DELETE" and path.startswith("/media/"):
@@ -186,6 +190,8 @@ def _create_upload_url(event: dict[str, Any]) -> dict[str, Any]:
             "storageBucket": MEDIA_BUCKET,
             "storageObject": object_key,
             "thumbnailObject": None,
+            "visibility": VISIBILITY_PRIVATE,
+            "allowTagEdit": False,
             "status": "upload_url_issued",
             "createdAt": created_at,
             "updatedAt": created_at,
@@ -249,14 +255,14 @@ def _list_media(event: dict[str, Any]) -> dict[str, Any]:
     tag = _normalize_tag(params.get("tag")) if params.get("tag") else ""
     min_count = int(params.get("minCount") or "1")
     requested = {tag: min_count} if tag else {}
-    items = _query_owned_media(owner_sub, requested)
+    items = _query_accessible_media(owner_sub, requested)
     return _response(200, {"items": _json_safe(items)})
 
 
 def _query_media_by_tags(event: dict[str, Any]) -> dict[str, Any]:
     owner_sub = _owner_sub(event)
     requested = _tag_count_query_from_body(_body(event))
-    items = _query_owned_media(owner_sub, requested)
+    items = _query_accessible_media(owner_sub, requested)
     return _response(200, {"query": requested, "items": _json_safe(items)})
 
 
@@ -275,7 +281,7 @@ def _query_media_by_file(event: dict[str, Any]) -> dict[str, Any]:
     inference = _post_inference({"base64": image_base64})
     inferred_counts = _counts_from_inference(inference)
     query_counts = {tag: 1 for tag in inferred_counts}
-    items = _query_owned_media(owner_sub, query_counts) if query_counts else []
+    items = _query_accessible_media(owner_sub, query_counts) if query_counts else []
     return _response(
         200,
         {
@@ -300,7 +306,7 @@ def _bulk_update_tags(event: dict[str, Any]) -> dict[str, Any]:
     if operation not in (0, 1):
         raise ValueError("operation must be 1 to add or 0 to remove")
 
-    targets = _target_media_items(owner_sub, body)
+    targets = _target_media_items(owner_sub, body, scope="tag_edit")
     updated: list[dict[str, Any]] = []
     now = _now()
     for item in targets:
@@ -374,7 +380,7 @@ def _query_original_by_thumbnail(event: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("thumbnail reference is invalid")
     matches = [
         item
-        for item in _query_owned_media(owner_sub, {})
+        for item in _query_accessible_media(owner_sub, {})
         if item.get("mediaType") == "image"
         and item.get("thumbnailObject") == thumbnail_object
     ]
@@ -392,7 +398,51 @@ def _query_original_by_thumbnail(event: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _update_media_sharing(event: dict[str, Any], media_id: str) -> dict[str, Any]:
+    owner_sub = _owner_sub(event)
+    item = _load_owned_media(event, media_id)
+    body = _body(event)
+    visibility = _normalize_visibility(body.get("visibility"))
+    allow_tag_edit = _parse_bool(body.get("allowTagEdit", False))
+    if visibility == VISIBILITY_PRIVATE:
+        allow_tag_edit = False
+    now = _now()
+    media_table.update_item(
+        Key={"mediaId": media_id},
+        UpdateExpression=(
+            "SET visibility = :visibility, allowTagEdit = :allowTagEdit, "
+            "updatedAt = :updatedAt"
+        ),
+        ConditionExpression="ownerSub = :ownerSub",
+        ExpressionAttributeValues={
+            ":visibility": visibility,
+            ":allowTagEdit": allow_tag_edit,
+            ":updatedAt": now,
+            ":ownerSub": owner_sub,
+        },
+    )
+    refreshed = dict(item)
+    refreshed["visibility"] = visibility
+    refreshed["allowTagEdit"] = allow_tag_edit
+    refreshed["updatedAt"] = now
+    return _response(200, {"media": _json_safe(_with_fresh_media_urls(refreshed))})
+
+
 def _query_owned_media(owner_sub: str, requested: dict[str, int]) -> list[dict[str, Any]]:
+    return _hydrate_and_filter_media(_query_media_by_owner(owner_sub), requested)
+
+
+def _query_accessible_media(owner_sub: str, requested: dict[str, int]) -> list[dict[str, Any]]:
+    by_media_id: dict[str, dict[str, Any]] = {}
+    for item in _query_media_by_owner(owner_sub):
+        by_media_id[str(item.get("mediaId") or "")] = item
+    for item in _query_shared_media():
+        if _can_view_media(item, owner_sub):
+            by_media_id.setdefault(str(item.get("mediaId") or ""), item)
+    return _hydrate_and_filter_media(list(by_media_id.values()), requested)
+
+
+def _query_media_by_owner(owner_sub: str) -> list[dict[str, Any]]:
     all_items: list[dict[str, Any]] = []
     start_key: dict[str, Any] | None = None
     while True:
@@ -407,6 +457,37 @@ def _query_owned_media(owner_sub: str, requested: dict[str, int]) -> list[dict[s
         start_key = result.get("LastEvaluatedKey")
         if not start_key:
             break
+    return all_items
+
+
+def _query_shared_media() -> list[dict[str, Any]]:
+    all_items: list[dict[str, Any]] = []
+    start_key: dict[str, Any] | None = None
+    while True:
+        query_kwargs: dict[str, Any] = {
+            "IndexName": "visibility-createdAt-index",
+            "KeyConditionExpression": Key("visibility").eq(VISIBILITY_SHARED),
+        }
+        if start_key:
+            query_kwargs["ExclusiveStartKey"] = start_key
+        try:
+            result = media_table.query(**query_kwargs)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code")
+            if code == "ValidationException":
+                LOG.warning("visibility-createdAt-index is unavailable; skipping shared media")
+                return []
+            raise
+        all_items.extend(result.get("Items", []))
+        start_key = result.get("LastEvaluatedKey")
+        if not start_key:
+            break
+    return all_items
+
+
+def _hydrate_and_filter_media(
+    all_items: list[dict[str, Any]], requested: dict[str, int]
+) -> list[dict[str, Any]]:
     items = [
         item
         for item in all_items
@@ -417,7 +498,7 @@ def _query_owned_media(owner_sub: str, requested: dict[str, int]) -> list[dict[s
 
 
 def _get_media(event: dict[str, Any], media_id: str) -> dict[str, Any]:
-    item = _load_owned_media(event, media_id)
+    item = _load_accessible_media(event, media_id)
     return _response(200, {"media": _json_safe(_with_fresh_media_urls(item))})
 
 
@@ -691,9 +772,42 @@ def _load_owned_media(event: dict[str, Any], media_id: str) -> dict[str, Any]:
         raise ValueError("media item not found")
     if item.get("ownerSub") != owner_sub:
         raise PermissionError()
-    if item.get("deletedAt") or item.get("status") == "deleted":
+    if _is_deleted_media(item):
         raise ValueError("media item not found")
     return item
+
+
+def _load_accessible_media(event: dict[str, Any], media_id: str) -> dict[str, Any]:
+    owner_sub = _owner_sub(event)
+    result = media_table.get_item(Key={"mediaId": media_id})
+    item = result.get("Item")
+    if not item or _is_deleted_media(item):
+        raise ValueError("media item not found")
+    if not _can_view_media(item, owner_sub):
+        raise PermissionError()
+    return item
+
+
+def _is_deleted_media(item: dict[str, Any]) -> bool:
+    return bool(item.get("deletedAt") or item.get("status") == "deleted")
+
+
+def _media_visibility(item: dict[str, Any]) -> str:
+    return str(item.get("visibility") or VISIBILITY_PRIVATE)
+
+
+def _is_shared_media(item: dict[str, Any]) -> bool:
+    return _media_visibility(item) == VISIBILITY_SHARED
+
+
+def _can_view_media(item: dict[str, Any], owner_sub: str) -> bool:
+    return item.get("ownerSub") == owner_sub or _is_shared_media(item)
+
+
+def _can_edit_media_tags(item: dict[str, Any], owner_sub: str) -> bool:
+    return item.get("ownerSub") == owner_sub or (
+        _is_shared_media(item) and bool(item.get("allowTagEdit"))
+    )
 
 
 def _infer_media_type(content_type: str) -> str:
@@ -750,8 +864,31 @@ def _filename_extension(filename: str) -> str:
     return f".{filename.rsplit('.', 1)[1].lower()}"
 
 
+def _normalize_visibility(value: Any) -> str:
+    visibility = str(value or VISIBILITY_PRIVATE).strip().lower()
+    if visibility not in (VISIBILITY_PRIVATE, VISIBILITY_SHARED):
+        raise ValueError("visibility must be private or shared")
+    return visibility
+
+
+def _parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("true", "1", "yes"):
+            return True
+        if normalized in ("false", "0", "no", ""):
+            return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    raise ValueError("allowTagEdit must be a boolean")
+
+
 def _with_fresh_media_urls(item: dict[str, Any]) -> dict[str, Any]:
     hydrated = dict(item)
+    hydrated["visibility"] = _media_visibility(hydrated)
+    hydrated["allowTagEdit"] = bool(hydrated.get("allowTagEdit"))
     bucket = hydrated.get("storageBucket") or MEDIA_BUCKET
     storage_object = hydrated.get("storageObject")
     thumbnail_object = hydrated.get("thumbnailObject")
@@ -1071,14 +1208,21 @@ def _clean_string_list(value: Any, field_name: str) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
-def _target_media_items(owner_sub: str, body: dict[str, Any]) -> list[dict[str, Any]]:
+def _target_media_items(
+    owner_sub: str, body: dict[str, Any], *, scope: str = "owned"
+) -> list[dict[str, Any]]:
     media_ids = set(_clean_string_list(body.get("mediaIds", []), "mediaIds"))
     urls = set(_clean_string_list(body.get("urls", []), "urls"))
     storage_objects = {_storage_object_from_url(url) for url in urls}
     storage_objects.discard("")
     if not media_ids and not storage_objects:
         raise ValueError("mediaIds or urls must be provided")
-    all_items = _query_owned_media(owner_sub, {})
+    if scope == "tag_edit":
+        all_items = _query_accessible_media(owner_sub, {})
+    elif scope == "owned":
+        all_items = _query_owned_media(owner_sub, {})
+    else:
+        raise ValueError("unsupported media target scope")
     targets = [
         item
         for item in all_items
@@ -1087,7 +1231,11 @@ def _target_media_items(owner_sub: str, body: dict[str, Any]) -> list[dict[str, 
         or item.get("thumbnailObject") in storage_objects
     ]
     if not targets:
-        raise ValueError("no matching owned media found")
+        raise ValueError("no matching media found")
+    if scope == "tag_edit" and any(
+        not _can_edit_media_tags(item, owner_sub) for item in targets
+    ):
+        raise PermissionError()
     return targets
 
 
@@ -1199,7 +1347,7 @@ def _response(status_code: int, body: Any) -> dict[str, Any]:
         "headers": {
             "Access-Control-Allow-Origin": CORS_ALLOWED_ORIGIN,
             "Access-Control-Allow-Headers": "Content-Type,Authorization",
-            "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+            "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
             "Content-Type": "application/json",
         },
         "body": json.dumps(_json_safe(body)),

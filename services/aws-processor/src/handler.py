@@ -415,29 +415,7 @@ def _create_video_thumbnail(
         source = tmp / "source"
         thumbnail = tmp / "thumbnail.jpg"
         s3.download_file(bucket, key, str(source))
-        subprocess.run(
-            [
-                ffmpeg,
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-i",
-                str(source),
-                "-ss",
-                "00:00:01",
-                "-frames:v",
-                "1",
-                "-vf",
-                "scale='min(360,iw)':-2",
-                "-q:v",
-                "3",
-                str(thumbnail),
-            ],
-            check=True,
-            timeout=60,
-        )
-        if not thumbnail.exists():
-            raise RuntimeError("video thumbnail frame was not generated")
+        _extract_video_thumbnail_frame(ffmpeg, source, thumbnail)
         s3.upload_file(
             str(thumbnail),
             bucket,
@@ -445,6 +423,41 @@ def _create_video_thumbnail(
             ExtraArgs={"ContentType": "image/jpeg"},
         )
     return thumbnail_key, _presigned_get_url(bucket, thumbnail_key)
+
+
+def _extract_video_thumbnail_frame(ffmpeg: str, source: Path, thumbnail: Path) -> None:
+    last_error: Exception | None = None
+    for seek_time in ("00:00:01", "00:00:00"):
+        if thumbnail.exists():
+            thumbnail.unlink()
+        try:
+            subprocess.run(
+                [
+                    ffmpeg,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    str(source),
+                    "-ss",
+                    seek_time,
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "scale='min(360,iw)':-2",
+                    "-q:v",
+                    "3",
+                    str(thumbnail),
+                ],
+                check=True,
+                timeout=60,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            last_error = exc
+            continue
+        if thumbnail.exists():
+            return
+    raise RuntimeError("video thumbnail frame was not generated") from last_error
 
 
 def _presigned_get_url(bucket: str, key: str, expires: int = 3600) -> str:

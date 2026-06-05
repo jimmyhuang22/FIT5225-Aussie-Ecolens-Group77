@@ -61,6 +61,7 @@ import {
   queryMediaByFile,
   queryMediaByTags,
   sha256Hex,
+  updateMediaSharing,
   uploadToPresignedUrl,
   type MediaItem,
   type Subscription,
@@ -85,7 +86,7 @@ const PENDING_MEDIA_STATUSES = new Set(["upload_url_issued", "uploaded", "proces
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.message === "thumbnail_lookup_failed_400") {
-      return "No matching image found in this account. Check the thumbnail URL and signed-in account.";
+      return "No matching accessible image found. Check the thumbnail URL and signed-in account.";
     }
     if (err.detail) return `${err.detail} (${err.status})`;
     return `${err.message} (${err.status})`;
@@ -131,6 +132,22 @@ function statusVariant(status: string): "success" | "warning" | "destructive" | 
   if (status === "failed") return "destructive";
   if (PENDING_MEDIA_STATUSES.has(status)) return "warning";
   return "secondary";
+}
+
+function mediaVisibility(item: MediaItem): "private" | "shared" {
+  return item.visibility === "shared" ? "shared" : "private";
+}
+
+function isMediaOwner(item: MediaItem, userId?: string): boolean {
+  return Boolean(userId && item.ownerSub === userId);
+}
+
+function canEditMediaTags(item: MediaItem, userId?: string): boolean {
+  return isMediaOwner(item, userId) || (mediaVisibility(item) === "shared" && item.allowTagEdit);
+}
+
+function canDeleteMedia(item: MediaItem, userId?: string): boolean {
+  return isMediaOwner(item, userId);
 }
 
 function toneToAlert(tone: NonNullable<Notice>["tone"]): "default" | "destructive" | "success" | "info" {
@@ -193,6 +210,14 @@ export function MediaPage() {
   const selectedItems = useMemo(
     () => items.filter((item) => selectedIds.includes(item.mediaId)),
     [items, selectedIds],
+  );
+  const selectedCanEditTags = useMemo(
+    () => selectedItems.length > 0 && selectedItems.every((item) => canEditMediaTags(item, user?.userId)),
+    [selectedItems, user?.userId],
+  );
+  const selectedCanDelete = useMemo(
+    () => selectedItems.length > 0 && selectedItems.every((item) => canDeleteMedia(item, user?.userId)),
+    [selectedItems, user?.userId],
   );
 
   async function refresh(nextTag = tag, options: { showLoading?: boolean } = {}) {
@@ -338,7 +363,7 @@ export function MediaPage() {
         originalUrl: result.originalUrl,
         storageObject: result.storageObject,
       });
-      setNotice({ tone: "success", text: "Thumbnail resolved in this account." });
+      setNotice({ tone: "success", text: "Thumbnail resolved from accessible media." });
       toast.success("Thumbnail resolved");
     } catch (err) {
       const message = errorMessage(err);
@@ -360,7 +385,10 @@ export function MediaPage() {
       toast.error("Enter at least one tag.");
       return;
     }
-    const selectedItems = items.filter((item) => selectedIds.includes(item.mediaId));
+    if (!selectedCanEditTags) {
+      toast.error("Selected media cannot be edited.");
+      return;
+    }
     const urls = selectedItems
       .map((item) => item.originalUrl || item.thumbnailUrl || item.storageObject)
       .filter((url): url is string => Boolean(url));
@@ -390,6 +418,10 @@ export function MediaPage() {
 
   async function performBulkDelete() {
     if (selectedItems.length === 0) return;
+    if (!selectedCanDelete) {
+      toast.error("Only media you own can be deleted.");
+      return;
+    }
     const urls = selectedItems
       .map((item) => item.originalUrl || item.thumbnailUrl || item.storageObject)
       .filter((url): url is string => Boolean(url));
@@ -418,6 +450,11 @@ export function MediaPage() {
   }
 
   async function performDelete(mediaId: string) {
+    const item = items.find((candidate) => candidate.mediaId === mediaId);
+    if (item && !canDeleteMedia(item, user?.userId)) {
+      toast.error("Only media you own can be deleted.");
+      return;
+    }
     setNotice({ tone: "info", text: "Deleting media..." });
     try {
       await deleteMedia(mediaId);
@@ -460,6 +497,30 @@ export function MediaPage() {
       toast.success(`${label} URL copied.`);
     } catch (err) {
       toast.error("Copy failed", { description: errorMessage(err) });
+    }
+  }
+
+  async function onUpdateSharing(
+    item: MediaItem,
+    visibility: "private" | "shared",
+    allowTagEdit: boolean,
+  ) {
+    if (!isMediaOwner(item, user?.userId)) {
+      toast.error("Only the owner can change sharing.");
+      return;
+    }
+    setNotice({ tone: "info", text: "Updating sharing settings..." });
+    try {
+      const updated = await updateMediaSharing(item.mediaId, visibility, allowTagEdit);
+      setItems((previous) =>
+        previous.map((candidate) => (candidate.mediaId === updated.mediaId ? updated : candidate)),
+      );
+      setNotice({ tone: "success", text: "Sharing settings updated." });
+      toast.success("Sharing settings updated");
+    } catch (err) {
+      const message = errorMessage(err);
+      setNotice({ tone: "error", text: `Sharing update failed: ${message}` });
+      toast.error("Sharing update failed", { description: message });
     }
   }
 
@@ -584,7 +645,7 @@ export function MediaPage() {
                   type="button"
                   variant="destructive"
                   size="sm"
-                  disabled={selectedIds.length === 0}
+                  disabled={!selectedCanDelete}
                   onClick={() => setDeleteTarget({ kind: "bulk" })}
                 >
                   <Trash2 />
@@ -597,77 +658,119 @@ export function MediaPage() {
           </CardHeader>
           <CardContent className="p-4 sm:p-5">
             <div className={items.length > 0 ? "max-h-[calc(100vh-18rem)] space-y-3 overflow-y-auto pr-1" : "space-y-3"}>
-              {items.map((item) => (
-                <article className="rounded-xl border bg-card p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md" key={item.mediaId}>
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="flex min-w-0 gap-4">
-                      <Checkbox
-                        aria-label={`Select ${item.mediaId}`}
-                        checked={selectedIds.includes(item.mediaId)}
-                        onCheckedChange={() => toggleSelected(item.mediaId)}
-                        className="mt-1"
-                      />
-                      <div className="media-preview">
-                        {item.thumbnailUrl || (item.originalUrl && item.mediaType === "image") ? (
-                          <img src={item.thumbnailUrl || item.originalUrl || ""} alt={item.mediaId} />
-                        ) : (
-                          <span>{item.mediaType}</span>
-                        )}
-                      </div>
-                      <div className="min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold text-emerald-950">{shortId(item.mediaId)}</h3>
-                          <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
-                          <Badge variant="outline">{item.mediaType}</Badge>
-                        </div>
-                        <p className="break-all text-sm text-muted-foreground">{item.storageObject}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {Object.entries(item.tagCounts || {}).length === 0 ? (
-                            <Badge variant="secondary">No tags yet</Badge>
+              {items.map((item) => {
+                const ownedByCurrentUser = isMediaOwner(item, user?.userId);
+                const itemCanEditTags = canEditMediaTags(item, user?.userId);
+                const itemCanDelete = canDeleteMedia(item, user?.userId);
+                const itemVisibility = mediaVisibility(item);
+
+                return (
+                  <article className="rounded-xl border bg-card p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md" key={item.mediaId}>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex min-w-0 gap-4">
+                        <Checkbox
+                          aria-label={`Select ${item.mediaId}`}
+                          checked={selectedIds.includes(item.mediaId)}
+                          onCheckedChange={() => toggleSelected(item.mediaId)}
+                          disabled={!itemCanEditTags && !itemCanDelete}
+                          className="mt-1"
+                        />
+                        <div className="media-preview">
+                          {item.thumbnailUrl || (item.originalUrl && item.mediaType === "image") ? (
+                            <img src={item.thumbnailUrl || item.originalUrl || ""} alt={item.mediaId} />
                           ) : (
-                            Object.entries(item.tagCounts || {}).map(([tagName, count]) => (
-                              <Badge variant="secondary" key={tagName}>{tagName} x{count}</Badge>
-                            ))
+                            <span>{item.mediaType}</span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">Model: {item.modelVersion}</p>
-                        {item.status === "failed" && item.processingError && (
-                          <Alert variant="destructive" className="mt-2">
-                            <ShieldAlert className="size-4" />
-                            <AlertDescription>{item.processingError}</AlertDescription>
-                          </Alert>
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold text-emerald-950">{shortId(item.mediaId)}</h3>
+                            <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
+                            <Badge variant="outline">{item.mediaType}</Badge>
+                            <Badge variant={itemVisibility === "shared" ? "success" : "secondary"}>
+                              {itemVisibility === "shared" ? "Shared" : "Private"}
+                            </Badge>
+                            {!ownedByCurrentUser && <Badge variant="outline">Shared access</Badge>}
+                            {!ownedByCurrentUser && itemCanEditTags && <Badge variant="secondary">Tag edit allowed</Badge>}
+                          </div>
+                          <p className="break-all text-sm text-muted-foreground">{item.storageObject}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {Object.entries(item.tagCounts || {}).length === 0 ? (
+                              <Badge variant="secondary">No tags yet</Badge>
+                            ) : (
+                              Object.entries(item.tagCounts || {}).map(([tagName, count]) => (
+                                <Badge variant="secondary" key={tagName}>{tagName} x{count}</Badge>
+                              ))
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">Model: {item.modelVersion}</p>
+                          {item.status === "failed" && item.processingError && (
+                            <Alert variant="destructive" className="mt-2">
+                              <ShieldAlert className="size-4" />
+                              <AlertDescription>{item.processingError}</AlertDescription>
+                            </Alert>
+                          )}
+                          {ownedByCurrentUser && (
+                            <div className="flex flex-wrap gap-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                              <label className="flex items-center gap-2">
+                                <Checkbox
+                                  checked={itemVisibility === "shared"}
+                                  onCheckedChange={(checked) =>
+                                    void onUpdateSharing(
+                                      item,
+                                      checked === true ? "shared" : "private",
+                                      checked === true ? item.allowTagEdit : false,
+                                    )
+                                  }
+                                />
+                                Shared
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <Checkbox
+                                  checked={itemVisibility === "shared" && item.allowTagEdit}
+                                  disabled={itemVisibility !== "shared"}
+                                  onCheckedChange={(checked) =>
+                                    void onUpdateSharing(item, "shared", checked === true)
+                                  }
+                                />
+                                Allow tag edit
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+                        {item.originalUrl && (
+                          <Button asChild variant="outline" size="sm">
+                            <a href={item.originalUrl} target="_blank" rel="noreferrer"><ExternalLink /> Open</a>
+                          </Button>
+                        )}
+                        {item.thumbnailUrl && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Thumbnail", item.thumbnailUrl)}>
+                            <Copy /> Thumbnail
+                          </Button>
+                        )}
+                        {item.originalUrl && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Original", item.originalUrl)}>
+                            <Copy /> Original
+                          </Button>
+                        )}
+                        {item.mediaType === "image" && item.thumbnailUrl && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => void onThumbnailLookup(item)}>
+                            Lookup original
+                          </Button>
+                        )}
+                        {itemCanDelete && (
+                          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTarget({ kind: "single", mediaId: item.mediaId })}>
+                            <Trash2 /> Delete
+                          </Button>
                         )}
                       </div>
                     </div>
-
-                    <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-                      {item.originalUrl && (
-                        <Button asChild variant="outline" size="sm">
-                          <a href={item.originalUrl} target="_blank" rel="noreferrer"><ExternalLink /> Open</a>
-                        </Button>
-                      )}
-                      {item.thumbnailUrl && (
-                        <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Thumbnail", item.thumbnailUrl)}>
-                          <Copy /> Thumbnail
-                        </Button>
-                      )}
-                      {item.originalUrl && (
-                        <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Original", item.originalUrl)}>
-                          <Copy /> Original
-                        </Button>
-                      )}
-                      {item.mediaType === "image" && item.thumbnailUrl && (
-                        <Button type="button" variant="outline" size="sm" onClick={() => void onThumbnailLookup(item)}>
-                          Lookup original
-                        </Button>
-                      )}
-                      <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTarget({ kind: "single", mediaId: item.mediaId })}>
-                        <Trash2 /> Delete
-                      </Button>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
               {items.length === 0 && (
                 <div className="rounded-xl border border-dashed bg-muted/20 p-10 text-center text-muted-foreground">
                   <FileImage className="mx-auto mb-3 size-10 opacity-50" />
@@ -835,7 +938,7 @@ export function MediaPage() {
                         </SelectContent>
                       </Select>
                     </Field>
-                    <Button className="w-full" type="submit">Apply tag change</Button>
+                    <Button className="w-full" type="submit" disabled={!selectedCanEditTags}>Apply tag change</Button>
                   </form>
                 </TabsContent>
 

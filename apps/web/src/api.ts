@@ -63,6 +63,7 @@ export interface UploadUrlResponse {
 
 export interface MediaItem {
   mediaId: string;
+  ownerSub: string;
   mediaType: "image" | "video";
   storageObject: string;
   status: string;
@@ -72,6 +73,8 @@ export interface MediaItem {
   processingError?: string | null;
   originalUrl: string | null;
   thumbnailUrl: string | null;
+  visibility: "private" | "shared";
+  allowTagEdit: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -231,6 +234,27 @@ export async function bulkUpdateTags(
   }
   const payload = (await res.json()) as { updated: MediaItem[] };
   return payload.updated;
+}
+
+export async function updateMediaSharing(
+  mediaId: string,
+  visibility: "private" | "shared",
+  allowTagEdit: boolean,
+): Promise<MediaItem> {
+  const headers = {
+    ...(await authHeader()),
+    "Content-Type": "application/json",
+  };
+  const res = await fetch(`${API_BASE_URL}/media/${mediaId}/sharing`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ visibility, allowTagEdit }),
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, `sharing_update_failed_${res.status}`);
+  }
+  const payload = (await res.json()) as { media: MediaItem };
+  return payload.media;
 }
 
 export async function bulkDeleteMedia(

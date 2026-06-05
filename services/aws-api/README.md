@@ -9,6 +9,7 @@ Implemented endpoints:
 - `POST /media/{mediaId}/complete`
 - `GET /media`
 - `GET /media/{mediaId}`
+- `PATCH /media/{mediaId}/sharing`
 - `POST /media/query/tags`
 - `POST /media/query/file`
 - `POST /media/query/thumbnail`
@@ -20,8 +21,10 @@ Implemented endpoints:
 - `DELETE /subscriptions/{subscriptionId}`
 
 The API Gateway Cognito authorizer supplies the user claims. The Lambda stores media
-records and subscriptions in DynamoDB, creates S3 presigned upload URLs, and only
-returns records owned by the authenticated Cognito `sub`.
+records and subscriptions in DynamoDB and creates S3 presigned upload URLs.
+Media defaults to owner-only access. Owners can set `visibility=shared` and
+`allowTagEdit=true` so other registered users can view the media and optionally
+edit its tags. Delete and sharing-setting changes remain owner-only.
 
 SNS email subscriptions are created with a `FilterPolicy` on the `routeKey`
 message attribute, where each route key is `<ownerSub>#<tag>`. The processor

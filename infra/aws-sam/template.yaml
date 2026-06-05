@@ -159,6 +159,10 @@ Resources:
           AttributeType: S
         - AttributeName: ownerChecksumKey
           AttributeType: S
+        - AttributeName: visibility
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
       KeySchema:
         - AttributeName: mediaId
           KeyType: HASH
@@ -173,6 +177,14 @@ Resources:
           KeySchema:
             - AttributeName: ownerChecksumKey
               KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: visibility-createdAt-index
+          KeySchema:
+            - AttributeName: visibility
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
           Projection:
             ProjectionType: ALL
 
@@ -228,7 +240,7 @@ Resources:
     Properties:
       StageName: Prod
       Cors:
-        AllowMethods: "'GET,POST,DELETE,OPTIONS'"
+        AllowMethods: "'GET,POST,PATCH,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: !Sub "'${AllowedCorsOrigin}'"
       Auth:
@@ -295,6 +307,7 @@ Resources:
               - !GetAtt MediaTable.Arn
               - !Sub "${MediaTable.Arn}/index/ownerSub-createdAt-index"
               - !Sub "${MediaTable.Arn}/index/ownerChecksumKey-index"
+              - !Sub "${MediaTable.Arn}/index/visibility-createdAt-index"
         - Statement:
             Sid: ApiSubscriptionTableItems
             Effect: Allow

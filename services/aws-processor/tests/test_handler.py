@@ -134,6 +134,74 @@ class ProcessorHandlerTest(unittest.TestCase):
             {"macropus_giganteus": 2, "eastern_grey": 2},
         )
 
+    def test_video_thumbnail_falls_back_to_first_frame(self) -> None:
+        class ThumbnailS3:
+            def __init__(self) -> None:
+                self.uploaded: list[dict[str, Any]] = []
+
+            def download_file(self, _bucket: str, _key: str, filename: str) -> None:
+                Path(filename).write_bytes(b"video")
+
+            def upload_file(
+                self, filename: str, bucket: str, key: str, ExtraArgs: dict[str, str]
+            ) -> None:
+                self.uploaded.append(
+                    {
+                        "filename_exists": Path(filename).exists(),
+                        "bucket": bucket,
+                        "key": key,
+                        "ExtraArgs": ExtraArgs,
+                    }
+                )
+
+            def generate_presigned_url(self, **_kwargs: Any) -> str:
+                return "https://signed.example/thumbnail.jpg"
+
+        calls: list[str] = []
+        original_s3 = self.handler.s3
+        original_ffmpeg = self.handler._ffmpeg_executable
+        original_run = self.handler.subprocess.run
+        fake_s3 = ThumbnailS3()
+
+        def fake_run(command: list[str], **_kwargs: Any) -> None:
+            seek_time = command[command.index("-ss") + 1]
+            calls.append(seek_time)
+            if seek_time == "00:00:00":
+                Path(command[-1]).write_bytes(b"thumbnail")
+
+        self.handler.s3 = fake_s3
+        self.handler._ffmpeg_executable = lambda: "/usr/bin/ffmpeg"
+        self.handler.subprocess.run = fake_run
+        try:
+            thumbnail_key, thumbnail_url = self.handler._create_video_thumbnail(
+                "media-bucket",
+                "uploads/user-1/media-1/clip.mp4",
+                {
+                    "ownerSub": "user-1",
+                    "mediaId": "media-1",
+                    "mediaType": "video",
+                },
+            )
+        finally:
+            self.handler.s3 = original_s3
+            self.handler._ffmpeg_executable = original_ffmpeg
+            self.handler.subprocess.run = original_run
+
+        self.assertEqual(calls, ["00:00:01", "00:00:00"])
+        self.assertEqual(thumbnail_key, "thumbnails/user-1/media-1/thumbnail.jpg")
+        self.assertEqual(thumbnail_url, "https://signed.example/thumbnail.jpg")
+        self.assertEqual(
+            fake_s3.uploaded,
+            [
+                {
+                    "filename_exists": True,
+                    "bucket": "media-bucket",
+                    "key": "thumbnails/user-1/media-1/thumbnail.jpg",
+                    "ExtraArgs": {"ContentType": "image/jpeg"},
+                }
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

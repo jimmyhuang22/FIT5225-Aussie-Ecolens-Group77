@@ -225,6 +225,82 @@ class HandlerErrorHandlingTest(unittest.TestCase):
         self.assertEqual(fake_sns.attributes[0]["AttributeName"], "FilterPolicy")
         self.assertEqual(fake_sns.attributes[1]["AttributeName"], "FilterPolicyScope")
 
+    def test_subscription_filter_update_rejects_foreign_topic_arn(self) -> None:
+        class RecordingSns:
+            def __init__(self) -> None:
+                self.attributes: list[dict[str, str]] = []
+
+            def set_subscription_attributes(self, **kwargs: str) -> None:
+                self.attributes.append(kwargs)
+
+        original_sns = self.app.sns
+        original_topic_arn = self.app.NOTIFICATION_TOPIC_ARN
+        fake_sns = RecordingSns()
+        self.app.sns = fake_sns
+        self.app.NOTIFICATION_TOPIC_ARN = "arn:aws:sns:ap-southeast-2:123:topic"
+        try:
+            with self.assertRaisesRegex(RuntimeError, "does not belong"):
+                self.app._set_subscription_filter_policy(
+                    "arn:aws:sns:ap-southeast-2:123:other-topic:sub",
+                    ["user-1#felis_catus"],
+                )
+        finally:
+            self.app.sns = original_sns
+            self.app.NOTIFICATION_TOPIC_ARN = original_topic_arn
+
+        self.assertEqual(fake_sns.attributes, [])
+
+    def test_delete_subscription_rejects_foreign_topic_arn_before_unsubscribe(self) -> None:
+        class SubscriptionTableWithForeignArn:
+            def __init__(self) -> None:
+                self.updated: list[dict[str, Any]] = []
+
+            def get_item(self, **_kwargs: Any) -> dict[str, Any]:
+                return {
+                    "Item": {
+                        "subscriptionId": "sub-1",
+                        "ownerSub": "user-1",
+                        "email": "unit@example.com",
+                        "snsSubscriptionArn": (
+                            "arn:aws:sns:ap-southeast-2:123:other-topic:sub"
+                        ),
+                    }
+                }
+
+            def update_item(self, **kwargs: Any) -> None:
+                self.updated.append(kwargs)
+
+            def query(self, **_kwargs: Any) -> dict[str, Any]:
+                return {"Items": []}
+
+        class RecordingSns:
+            def __init__(self) -> None:
+                self.unsubscribed: list[dict[str, str]] = []
+
+            def unsubscribe(self, **kwargs: str) -> None:
+                self.unsubscribed.append(kwargs)
+
+        original_subscription_table = self.app.subscription_table
+        original_sns = self.app.sns
+        original_topic_arn = self.app.NOTIFICATION_TOPIC_ARN
+        fake_subscription_table = SubscriptionTableWithForeignArn()
+        fake_sns = RecordingSns()
+        self.app.subscription_table = fake_subscription_table
+        self.app.sns = fake_sns
+        self.app.NOTIFICATION_TOPIC_ARN = "arn:aws:sns:ap-southeast-2:123:topic"
+        try:
+            with self.assertRaisesRegex(RuntimeError, "does not belong"):
+                self.app._delete_subscription(
+                    _event("DELETE", "/subscriptions/sub-1"),
+                    "sub-1",
+                )
+        finally:
+            self.app.subscription_table = original_subscription_table
+            self.app.sns = original_sns
+            self.app.NOTIFICATION_TOPIC_ARN = original_topic_arn
+
+        self.assertEqual(fake_sns.unsubscribed, [])
+
     def test_notification_filter_policy_uses_owner_tag_route_keys(self) -> None:
         route_key = self.app._notification_route_key("user-1", " Felis Catus ")
         policy = self.app._notification_filter_policy(

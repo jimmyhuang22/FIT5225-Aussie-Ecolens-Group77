@@ -525,6 +525,7 @@ def _delete_subscription(event: dict[str, Any], subscription_id: str) -> dict[st
         if remaining_route_keys:
             _set_subscription_filter_policy(subscription_arn, remaining_route_keys)
         else:
+            _ensure_subscription_arn_belongs_to_topic(subscription_arn)
             sns.unsubscribe(SubscriptionArn=subscription_arn)
     return _response(200, {"subscriptionId": subscription_id, "deleted": True})
 
@@ -578,7 +579,16 @@ def _is_existing_subscription_attribute_error(exc: ClientError) -> bool:
     )
 
 
+def _ensure_subscription_arn_belongs_to_topic(subscription_arn: str) -> None:
+    if not NOTIFICATION_TOPIC_ARN:
+        raise RuntimeError("notification topic is not configured")
+    expected_prefix = f"{NOTIFICATION_TOPIC_ARN}:"
+    if not subscription_arn.startswith(expected_prefix):
+        raise RuntimeError("SNS subscription ARN does not belong to notification topic")
+
+
 def _set_subscription_filter_policy(subscription_arn: str, route_keys: list[str]) -> None:
+    _ensure_subscription_arn_belongs_to_topic(subscription_arn)
     filter_policy = _filter_policy_json(route_keys)
     sns.set_subscription_attributes(
         SubscriptionArn=subscription_arn,

@@ -273,7 +273,7 @@ export function MediaPage() {
       const upload = await createUploadUrl(file, checksum);
       if (upload.duplicate) {
         setFile(null);
-        setNotice({ tone: "success", text: "Duplicate detected. Existing media record was reused." });
+        setNotice(null);
         toast.success("Duplicate detected", { description: "Existing media record was reused." });
         await refresh();
         return;
@@ -284,7 +284,7 @@ export function MediaPage() {
       setNotice({ tone: "info", text: "Finalising upload..." });
       await completeUpload(upload.mediaId);
       setFile(null);
-      setNotice({ tone: "success", text: "Upload complete. Processing may take a few seconds." });
+      setNotice(null);
       toast.success("Upload complete", { description: "Processing may take a few seconds." });
       await refresh();
     } catch (err) {
@@ -314,7 +314,7 @@ export function MediaPage() {
       setItems(mediaResult.items);
       setSelectedIds([]);
       setSubscriptions(subscriptionResult.items.filter((item) => item.active));
-      setNotice({ tone: "success", text: "Tag-count query complete." });
+      setNotice(null);
       toast.success("Tag-count query complete");
     } catch (err) {
       const message = errorMessage(err);
@@ -368,7 +368,7 @@ export function MediaPage() {
         originalUrl: result.originalUrl,
         storageObject: result.storageObject,
       });
-      setNotice({ tone: "success", text: "Thumbnail resolved from accessible media." });
+      setNotice(null);
       toast.success("Thumbnail resolved");
     } catch (err) {
       const message = errorMessage(err);
@@ -407,7 +407,7 @@ export function MediaPage() {
       );
       const updatedById = new Map(updated.map((item) => [item.mediaId, item]));
       setItems((previous) => previous.map((item) => updatedById.get(item.mediaId) ?? item));
-      setNotice({ tone: "success", text: "Tags updated." });
+      setNotice(null);
       toast.success("Tags updated", {
         description:
           bulkOperation === "1"
@@ -437,7 +437,7 @@ export function MediaPage() {
     setNotice({ tone: "info", text: "Deleting selected media..." });
     try {
       const result = await bulkDeleteMedia(urls);
-      setNotice({ tone: "success", text: `${result.count} media item(s) deleted.` });
+      setNotice(null);
       toast.success("Selected media deleted", { description: `${result.count} item(s) removed.` });
       setSelectedIds([]);
       await refresh();
@@ -463,7 +463,7 @@ export function MediaPage() {
     setNotice({ tone: "info", text: "Deleting media..." });
     try {
       await deleteMedia(mediaId);
-      setNotice({ tone: "success", text: "Media deleted." });
+      setNotice(null);
       toast.success("Media deleted");
       await refresh();
     } catch (err) {
@@ -480,7 +480,7 @@ export function MediaPage() {
       const result = await lookupOriginalByThumbnail(item.thumbnailUrl);
       if (result.originalUrl) {
         window.open(result.originalUrl, "_blank", "noopener,noreferrer");
-        setNotice({ tone: "success", text: "Original image URL resolved." });
+        setNotice(null);
         toast.success("Original image URL resolved");
       } else {
         toast.error("Original image URL was not returned.");
@@ -520,7 +520,7 @@ export function MediaPage() {
       setItems((previous) =>
         previous.map((candidate) => (candidate.mediaId === updated.mediaId ? updated : candidate)),
       );
-      setNotice({ tone: "success", text: "Sharing settings updated." });
+      setNotice(null);
       toast.success("Sharing settings updated");
     } catch (err) {
       const message = errorMessage(err);
@@ -540,7 +540,7 @@ export function MediaPage() {
     try {
       await createSubscription(subscriptionEmail.trim(), tags);
       setSubscriptionTags("");
-      setNotice({ tone: "success", text: "Subscription saved. Confirm the SNS email if this is a new address." });
+      setNotice(null);
       toast.success("Subscription saved", {
         description: "Confirm the SNS email if this is a new address.",
       });
@@ -556,7 +556,7 @@ export function MediaPage() {
     setNotice({ tone: "info", text: "Removing subscription..." });
     try {
       await deleteSubscription(subscriptionId);
-      setNotice({ tone: "success", text: "Subscription removed." });
+      setNotice(null);
       toast.success("Subscription removed");
       await refresh();
     } catch (err) {

@@ -771,7 +771,7 @@ export function MediaPage() {
                       Checksum is calculated in browser. Duplicate uploads are rejected before storage.
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      After upload, processing may take 30-60 seconds. Use Refresh to update status.
+                      After upload, processing may take 30-60 seconds. Status refreshes automatically; use Refresh for an immediate update.
                     </p>
                   </div>
                   <form className="space-y-4" onSubmit={onUpload}>

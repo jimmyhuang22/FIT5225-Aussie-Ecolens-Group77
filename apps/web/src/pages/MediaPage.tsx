@@ -103,6 +103,15 @@ function splitTags(value: string): string[] {
     .filter(Boolean);
 }
 
+function normalizeTag(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function parseTagCounts(value: string): Record<string, number> {
   const out: Record<string, number> = {};
   for (const part of value.split(",")) {
@@ -126,6 +135,37 @@ function shortId(id: string): string {
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return count === 1 ? singular : plural;
+}
+
+function fileCount(count: number): string {
+  return `${count} ${pluralize(count, "file")}`;
+}
+
+function mediaHasTag(item: MediaItem, tag: string): boolean {
+  const normalized = normalizeTag(tag);
+  if (Number(item.tagCounts?.[normalized] ?? 0) > 0) return true;
+  return (item.tags || []).some((itemTag) => normalizeTag(itemTag) === normalized);
+}
+
+function bulkTagToastDescription(items: MediaItem[], tags: string[], operation: "1" | "0"): string {
+  if (operation === "1") {
+    return `Updated ${fileCount(items.length)}. Added tags are set to at least x1.`;
+  }
+
+  const normalizedTags = [...new Set(tags.map(normalizeTag).filter(Boolean))];
+  const summaries = normalizedTags.map((tag) => {
+    const removedCount = items.filter((item) => mediaHasTag(item, tag)).length;
+    const ignoredCount = Math.max(items.length - removedCount, 0);
+    if (removedCount > 0 && ignoredCount > 0) {
+      return `Removed ${tag} from ${fileCount(removedCount)}; ignored on ${fileCount(ignoredCount)}.`;
+    }
+    if (removedCount > 0) {
+      return `Removed ${tag} from ${fileCount(removedCount)}.`;
+    }
+    return `Ignored ${tag} because it was not assigned to ${fileCount(ignoredCount)}.`;
+  });
+
+  return `Updated ${fileCount(items.length)}. ${summaries.join(" ")}`;
 }
 
 function statusVariant(status: string): "success" | "warning" | "destructive" | "secondary" {
@@ -397,6 +437,7 @@ export function MediaPage() {
     const urls = selectedItems
       .map((item) => item.originalUrl || item.thumbnailUrl || item.storageObject)
       .filter((url): url is string => Boolean(url));
+    const toastDescription = bulkTagToastDescription(selectedItems, tags, bulkOperation);
     setNotice({ tone: "info", text: "Updating tags..." });
     try {
       const updated = await bulkUpdateTags(
@@ -409,10 +450,7 @@ export function MediaPage() {
       setItems((previous) => previous.map((item) => updatedById.get(item.mediaId) ?? item));
       setNotice(null);
       toast.success("Tags updated", {
-        description:
-          bulkOperation === "1"
-            ? "Added tags are set to at least x1."
-            : "Missing tags are ignored safely.",
+        description: toastDescription,
       });
     } catch (err) {
       const message = errorMessage(err);

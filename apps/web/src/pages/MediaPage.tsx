@@ -81,8 +81,14 @@ type DeleteTarget =
   | null;
 type ToolTab = "upload" | "search" | "manage" | "notify";
 type SharingMode = "private" | "shared" | "shared_edit";
+type MediaScope = "all" | "mine" | "shared";
 
 const PENDING_MEDIA_STATUSES = new Set(["upload_url_issued", "uploaded", "processing"]);
+const MEDIA_SCOPE_OPTIONS: { value: MediaScope; label: string }[] = [
+  { value: "all", label: "All visible" },
+  { value: "mine", label: "Mine" },
+  { value: "shared", label: "Shared with me" },
+];
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
@@ -253,6 +259,7 @@ export function MediaPage() {
   const [bulkOperation, setBulkOperation] = useState<"1" | "0">("1");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+  const [mediaScope, setMediaScope] = useState<MediaScope>("all");
 
   const processedCount = useMemo(
     () => items.filter((item) => item.status === "processed").length,
@@ -263,9 +270,36 @@ export function MediaPage() {
     () => items.some((item) => PENDING_MEDIA_STATUSES.has(item.status)),
     [items],
   );
+  const mineCount = useMemo(
+    () => (user?.userId ? items.filter((item) => isMediaOwner(item, user.userId)).length : 0),
+    [items, user?.userId],
+  );
+  const sharedWithMeCount = useMemo(
+    () =>
+      user?.userId
+        ? items.filter((item) => !isMediaOwner(item, user.userId) && mediaVisibility(item) === "shared").length
+        : 0,
+    [items, user?.userId],
+  );
+  const visibleItems = useMemo(() => {
+    if (mediaScope === "mine") {
+      return user?.userId ? items.filter((item) => isMediaOwner(item, user.userId)) : [];
+    }
+    if (mediaScope === "shared") {
+      return user?.userId
+        ? items.filter((item) => !isMediaOwner(item, user.userId) && mediaVisibility(item) === "shared")
+        : [];
+    }
+    return items;
+  }, [items, mediaScope, user?.userId]);
+  const mediaScopeCounts: Record<MediaScope, number> = {
+    all: items.length,
+    mine: mineCount,
+    shared: sharedWithMeCount,
+  };
   const selectedItems = useMemo(
-    () => items.filter((item) => selectedIds.includes(item.mediaId)),
-    [items, selectedIds],
+    () => visibleItems.filter((item) => selectedIds.includes(item.mediaId)),
+    [visibleItems, selectedIds],
   );
   const selectedCanEditTags = useMemo(
     () => selectedItems.length > 0 && selectedItems.every((item) => canEditMediaTags(item, user?.userId)),
@@ -434,7 +468,7 @@ export function MediaPage() {
   async function onBulkUpdate(event: FormEvent) {
     event.preventDefault();
     const tags = splitTags(bulkTags);
-    if (selectedIds.length === 0) {
+    if (selectedItems.length === 0) {
       toast.error("Select at least one media item.");
       return;
     }
@@ -453,7 +487,7 @@ export function MediaPage() {
     setNotice({ tone: "info", text: "Updating tags..." });
     try {
       const updated = await bulkUpdateTags(
-        selectedIds,
+        selectedItems.map((item) => item.mediaId),
         urls,
         tags,
         bulkOperation === "1" ? 1 : 0,
@@ -884,9 +918,29 @@ export function MediaPage() {
                 </CardTitle>
                 <CardDescription>
                   {items.length > 0
-                    ? `${items.length} ${pluralize(items.length, "media item")} loaded. ${selectedIds.length} selected.`
+                    ? `${visibleItems.length} of ${items.length} ${pluralize(items.length, "media item")} visible. ${selectedItems.length} selected.`
                     : "Your media library will appear here after upload or search."}
                 </CardDescription>
+                <div className="mt-3 flex flex-wrap gap-2" aria-label="Media visibility filter" role="group">
+                  {MEDIA_SCOPE_OPTIONS.map((option) => (
+                    <Button
+                      aria-pressed={mediaScope === option.value}
+                      key={option.value}
+                      onClick={() => {
+                        setMediaScope(option.value);
+                        setSelectedIds([]);
+                      }}
+                      size="sm"
+                      type="button"
+                      variant={mediaScope === option.value ? "secondary" : "ghost"}
+                    >
+                      {option.label}
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        {mediaScopeCounts[option.value]}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 {loading && <Badge variant="secondary"><Loader2 className="mr-1 size-3 animate-spin" /> Loading</Badge>}
@@ -898,8 +952,8 @@ export function MediaPage() {
                   onClick={() => setDeleteTarget({ kind: "bulk" })}
                 >
                   <Trash2 />
-                  {selectedIds.length > 0
-                    ? `Delete ${selectedIds.length} selected`
+                  {selectedItems.length > 0
+                    ? `Delete ${selectedItems.length} selected`
                     : "Delete selected"}
                 </Button>
               </div>
@@ -907,7 +961,7 @@ export function MediaPage() {
           </CardHeader>
           <CardContent className="p-4 sm:p-5">
             <div className="space-y-3">
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 const ownedByCurrentUser = isMediaOwner(item, user?.userId);
                 const itemCanEditTags = canEditMediaTags(item, user?.userId);
                 const itemCanDelete = canDeleteMedia(item, user?.userId);
@@ -1030,6 +1084,15 @@ export function MediaPage() {
                   <p className="font-medium text-foreground">No media yet</p>
                   <p className="mx-auto mt-1 max-w-md text-sm">
                     Upload an image or video to start species detection, then results and tags will appear in this panel.
+                  </p>
+                </div>
+              )}
+              {items.length > 0 && visibleItems.length === 0 && (
+                <div className="rounded-xl border border-dashed bg-muted/20 p-10 text-center text-muted-foreground">
+                  <FileImage className="mx-auto mb-3 size-10 opacity-50" />
+                  <p className="font-medium text-foreground">No media in this view</p>
+                  <p className="mx-auto mt-1 max-w-md text-sm">
+                    Switch to All visible or adjust the current search to see more accessible media.
                   </p>
                 </div>
               )}

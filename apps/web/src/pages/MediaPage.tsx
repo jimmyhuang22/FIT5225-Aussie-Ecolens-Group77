@@ -660,11 +660,17 @@ export function MediaPage() {
                 </TabsList>
 
                 <TabsContent value="upload" className="mt-5 space-y-5">
-          <div>
+                  <div className="space-y-1">
                     <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
                       <ImageUp className="size-5" /> Upload media
                     </h2>
-          </div>
+                    <p className="text-sm text-muted-foreground">
+                      Checksum is calculated in browser. Duplicate uploads are rejected before storage.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      After upload, processing may take 30-60 seconds. Use Refresh to update status.
+                    </p>
+                  </div>
                   <form className="space-y-4" onSubmit={onUpload}>
                     <Field label="Image or video">
                       <Input type="file" accept="image/*,video/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />

@@ -691,11 +691,11 @@ export function MediaPage() {
                 <TabsContent value="search" className="tool-grid mt-5">
                   <section className="tool-section">
                     <h2 className="tool-section-title">
-                      <Search className="size-5" /> Search by tag
+                      <Search className="size-5" /> Search by species
                     </h2>
                     <form className="space-y-4" onSubmit={onSearch}>
                       <Field label="Tag">
-                        <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="alectura_lathami" />
+                        <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="felis_catus" />
                       </Field>
                       <Button className="w-full" type="submit">Search</Button>
                     </form>
@@ -705,12 +705,13 @@ export function MediaPage() {
 
                   <section className="tool-section">
                     <h2 className="tool-section-title">
-                      <Tags className="size-5" /> Tag counts
+                      <Tags className="size-5" /> Search by tag counts
                     </h2>
                     <form className="space-y-4" onSubmit={onTagCountSearch}>
                       <Field label="Query">
-                        <Input value={tagCountQuery} onChange={(event) => setTagCountQuery(event.target.value)} placeholder="dingo:2, cattle:1" />
+                        <Input value={tagCountQuery} onChange={(event) => setTagCountQuery(event.target.value)} placeholder="felis_catus:1, manual_verified:1" />
                       </Field>
+                      <p className="text-xs text-muted-foreground">Multiple conditions use AND logic.</p>
                       <Button className="w-full" type="submit">Query</Button>
                     </form>
                   </section>
@@ -719,7 +720,7 @@ export function MediaPage() {
 
                   <section className="tool-section">
                     <h2 className="tool-section-title">
-                      <FileImage className="size-5" /> Query image
+                      <FileImage className="size-5" /> Search by query image
                     </h2>
                     <form className="space-y-4" onSubmit={onQueryFile}>
                       <Field label="Image file">
@@ -732,7 +733,9 @@ export function MediaPage() {
                   <Separator className="tool-separator" />
 
                   <section className="tool-section">
-                    <h2 className="tool-section-title">Thumbnail lookup</h2>
+                    <h2 className="tool-section-title">
+                      <ExternalLink className="size-5" /> Find original by thumbnail URL
+                    </h2>
                     <form className="space-y-4" onSubmit={onThumbnailUrlLookup}>
                       <Field label="Thumbnail URL">
                         <Input value={thumbnailLookupUrl} onChange={(event) => setThumbnailLookupUrl(event.target.value)} placeholder="https://..." type="url" />

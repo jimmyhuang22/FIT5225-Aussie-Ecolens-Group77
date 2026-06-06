@@ -175,6 +175,18 @@ function statusVariant(status: string): "success" | "warning" | "destructive" | 
   return "secondary";
 }
 
+function subscriptionStatusLabel(status?: string): string {
+  if (status === "subscribed") return "Confirmed";
+  if (status === "pending_confirmation") return "Pending confirmation";
+  return status ? status.replace(/_/g, " ") : "Status unknown";
+}
+
+function subscriptionStatusVariant(status?: string): "success" | "warning" | "secondary" {
+  if (status === "subscribed") return "success";
+  if (status === "pending_confirmation") return "warning";
+  return "secondary";
+}
+
 function mediaVisibility(item: MediaItem): "private" | "shared" {
   return item.visibility === "shared" ? "shared" : "private";
 }
@@ -817,10 +829,13 @@ export function MediaPage() {
                 </TabsContent>
 
                 <TabsContent value="notify" className="mt-5 space-y-5">
-                  <div>
+                  <div className="space-y-1">
                     <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
                       <Bell className="size-5" /> Notifications
                     </h2>
+                    <p className="text-sm text-muted-foreground">
+                      You must confirm the AWS SNS email before notifications are delivered.
+                    </p>
                   </div>
                   <form className="space-y-4" onSubmit={onCreateSubscription}>
                     <Field label="Email">
@@ -839,7 +854,9 @@ export function MediaPage() {
                           <div className="min-w-0 space-y-1">
                             <p className="break-all text-sm font-medium">{subscription.email}</p>
                             <p className="break-all text-xs text-muted-foreground">{subscription.tags.join(", ")}</p>
-                            {subscription.snsStatus && <Badge variant="secondary">SNS: {subscription.snsStatus}</Badge>}
+                            <Badge variant={subscriptionStatusVariant(subscription.snsStatus)}>
+                              {subscriptionStatusLabel(subscription.snsStatus)}
+                            </Badge>
                           </div>
                           <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget({ kind: "subscription", subscriptionId: subscription.subscriptionId })}>
                             Remove

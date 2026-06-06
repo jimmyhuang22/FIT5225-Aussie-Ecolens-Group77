@@ -224,6 +224,7 @@ export function MediaPage() {
     () => selectedItems.length > 0 && selectedItems.every((item) => canDeleteMedia(item, user?.userId)),
     [selectedItems, user?.userId],
   );
+  const signedInLabel = user?.email || user?.username || (user?.userId ? shortId(user.userId) : "Cognito user");
 
   async function refresh(nextTag = tag, options: { showLoading?: boolean } = {}) {
     const showLoading = options.showLoading ?? true;
@@ -607,7 +608,7 @@ export function MediaPage() {
             <Badge variant="secondary">Multi-cloud demo</Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
-            Signed in as {user?.userId ? shortId(user.userId) : user?.username ?? "Cognito user"}
+            Signed in as {signedInLabel}
           </p>
         </div>
 

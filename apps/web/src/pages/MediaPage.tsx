@@ -792,11 +792,14 @@ export function MediaPage() {
                 </TabsContent>
 
                 <TabsContent value="search" className="tool-grid mt-5">
-                  <section className="tool-section">
-                    <h2 className="tool-section-title">
-                      <Search className="size-5" /> Search by species
-                    </h2>
-                    <form className="space-y-4" onSubmit={onSearch}>
+                  <section className="tool-section query-card">
+                    <div className="query-card-header">
+                      <h2 className="tool-section-title">
+                        <Search className="size-5" /> Search by species
+                      </h2>
+                      <p className="query-card-description">Match media with one species or tag.</p>
+                    </div>
+                    <form className="query-card-form" onSubmit={onSearch}>
                       <Field label="Tag">
                         <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="felis_catus" />
                       </Field>
@@ -806,26 +809,32 @@ export function MediaPage() {
 
                   <Separator className="tool-separator" />
 
-                  <section className="tool-section">
-                    <h2 className="tool-section-title">
-                      <Tags className="size-5" /> Search by tag counts
-                    </h2>
-                    <form className="space-y-4" onSubmit={onTagCountSearch}>
+                  <section className="tool-section query-card">
+                    <div className="query-card-header">
+                      <h2 className="tool-section-title">
+                        <Tags className="size-5" /> Search by tag counts
+                      </h2>
+                      <p className="query-card-description">Require each requested tag count.</p>
+                    </div>
+                    <form className="query-card-form" onSubmit={onTagCountSearch}>
                       <Field label="Query">
                         <Input value={tagCountQuery} onChange={(event) => setTagCountQuery(event.target.value)} placeholder="felis_catus:1, manual_verified:1" />
                       </Field>
-                      <p className="text-xs text-muted-foreground">Multiple conditions use AND logic.</p>
+                      <p className="query-card-note">Multiple conditions use AND logic.</p>
                       <Button className="w-full" type="submit">Query</Button>
                     </form>
                   </section>
 
                   <Separator className="tool-separator" />
 
-                  <section className="tool-section">
-                    <h2 className="tool-section-title">
-                      <FileImage className="size-5" /> Search by query image
-                    </h2>
-                    <form className="space-y-4" onSubmit={onQueryFile}>
+                  <section className="tool-section query-card">
+                    <div className="query-card-header">
+                      <h2 className="tool-section-title">
+                        <FileImage className="size-5" /> Search by query image
+                      </h2>
+                      <p className="query-card-description">Infer tags from a temporary image.</p>
+                    </div>
+                    <form className="query-card-form" onSubmit={onQueryFile}>
                       <Field label="Image file">
                         <Input type="file" accept="image/*" onChange={(event) => setQueryFile(event.target.files?.[0] ?? null)} />
                       </Field>
@@ -835,11 +844,14 @@ export function MediaPage() {
 
                   <Separator className="tool-separator" />
 
-                  <section className="tool-section">
-                    <h2 className="tool-section-title">
-                      <ExternalLink className="size-5" /> Find original by thumbnail URL
-                    </h2>
-                    <form className="space-y-4" onSubmit={onThumbnailUrlLookup}>
+                  <section className="tool-section query-card">
+                    <div className="query-card-header">
+                      <h2 className="tool-section-title">
+                        <ExternalLink className="size-5" /> Find original
+                      </h2>
+                      <p className="query-card-description">Resolve a full-size file from a thumbnail URL.</p>
+                    </div>
+                    <form className="query-card-form" onSubmit={onThumbnailUrlLookup}>
                       <Field label="Thumbnail URL">
                         <Input value={thumbnailLookupUrl} onChange={(event) => setThumbnailLookupUrl(event.target.value)} placeholder="https://..." type="url" />
                       </Field>

@@ -154,6 +154,30 @@
     @apply rounded-md border bg-background/70 p-4;
   }
 
+  .query-card {
+    @apply flex min-h-72 flex-col;
+  }
+
+  .query-card-header {
+    @apply min-h-20 space-y-1;
+  }
+
+  .query-card-description {
+    @apply text-sm leading-snug text-muted-foreground;
+  }
+
+  .query-card-form {
+    @apply flex flex-1 flex-col gap-4;
+  }
+
+  .query-card-form > button {
+    @apply mt-auto;
+  }
+
+  .query-card-note {
+    @apply text-xs leading-snug text-muted-foreground;
+  }
+
   .tool-separator {
     @apply hidden;
   }

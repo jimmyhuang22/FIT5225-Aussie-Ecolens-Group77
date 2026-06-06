@@ -683,14 +683,14 @@ export function MediaPage() {
     if (deleteTarget.kind === "single") {
       return {
         title: `Delete ${shortId(deleteTarget.mediaId)}?`,
-        description: "This permanently removes the original media file, thumbnail, and database record.",
+        description: "This removes originals, thumbnails, videos, database records, and dedup entries.",
         action: "Delete media",
       };
     }
     if (deleteTarget.kind === "bulk") {
       return {
         title: `Delete ${selectedItems.length} selected ${pluralize(selectedItems.length, "media item")}?`,
-        description: "This permanently removes every selected media file, thumbnail, and related database record.",
+        description: "This removes selected originals, thumbnails, videos, database records, and dedup entries.",
         action: "Delete selected",
       };
     }

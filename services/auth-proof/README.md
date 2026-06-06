@@ -8,6 +8,11 @@ AWS Cognito login -> Cognito JWT -> GCP Cloud Run /protected/whoami
 
 Cloud Run may be made publicly reachable for this proof only because the app performs Cognito JWT validation before returning protected data.
 
+Token note: the final deployed AWS API and React frontend use the Cognito ID
+token for protected business routes. This earlier auth-proof service is
+configurable through `COGNITO_TOKEN_USE`; keep its token choice aligned with the
+value deployed for the proof environment.
+
 ## Endpoints
 
 | Endpoint | Auth | Expected behavior |
@@ -84,7 +89,7 @@ Expected: `403`.
 Valid-token protected request:
 
 ```powershell
-$token = "<paste Cognito access token locally only>"
+$token = "<paste Cognito JWT locally only>"
 Invoke-RestMethod http://localhost:8080/protected/whoami -Headers @{ Authorization = "Bearer $token" }
 ```
 
@@ -114,7 +119,7 @@ Use a user-managed Cloud Run service account with least privilege when the servi
 
 ## Local Frontend Integration
 
-Phase 2 ships a Vite + React + Amplify Auth frontend at `apps/web/` that signs users into Cognito and then calls `GET /api/me` on this service using the Cognito access token. Local dev expects:
+Phase 2 ships a Vite + React + Amplify Auth frontend at `apps/web/` that signs users into Cognito and then calls `GET /api/me` on this service using the Cognito JWT expected by `COGNITO_TOKEN_USE`. The final AWS API flow uses the Cognito ID token. Local dev expects:
 
 - API service: `http://localhost:8080` (this service, `npm start`).
 - Web frontend: `http://localhost:5173` (Vite dev server, `cd apps/web; npm run dev`).
@@ -129,8 +134,8 @@ try { Invoke-RestMethod http://localhost:8080/api/me } catch { $_.Exception.Resp
 # /api/me with malformed token returns 403
 try { Invoke-RestMethod http://localhost:8080/api/me -Headers @{ Authorization = "Bearer invalid.token.value" } } catch { $_.Exception.Response.StatusCode.value__ }
 
-# /api/me with a real Cognito access token returns the user object
-$token = "<paste Cognito access token locally only>"
+# /api/me with a real Cognito JWT returns the user object
+$token = "<paste Cognito JWT locally only>"
 Invoke-RestMethod http://localhost:8080/api/me -Headers @{ Authorization = "Bearer $token" }
 ```
 
@@ -159,7 +164,7 @@ Capture these for the report/demo folder:
 - `/protected/whoami` with valid Cognito token returning sanitized claims.
 - `/api/me` without token returning `401`.
 - `/api/me` with malformed token returning `403`.
-- `/api/me` with valid Cognito access token returning the `user` payload.
+- `/api/me` with a valid Cognito JWT returning the `user` payload.
 - Cloud Run logs showing protected endpoint requests.
 
 Redact emails, account IDs, raw JWTs, and any sensitive values before sharing screenshots.

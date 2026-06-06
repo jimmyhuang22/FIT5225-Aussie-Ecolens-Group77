@@ -96,17 +96,22 @@ Evidence to capture:
 
 ## Phase 2 Protected Endpoints
 
+Token note: the final deployed AWS API and React frontend use the Cognito ID
+token for protected business routes. The earlier auth-proof Cloud Run service is
+configurable through `COGNITO_TOKEN_USE`; use a token whose `token_use` matches
+that proof-service setting.
+
 ### `GET /api/me`
 
-Purpose: Return the authenticated user's identity to the web frontend (and any service-to-service caller carrying a Cognito access token).
+Purpose: Return the authenticated user's identity to the web frontend (and any service-to-service caller carrying the expected Cognito JWT).
 
-Auth: Required (Cognito access token).
+Auth: Required. For the final AWS API flow, send the Cognito ID token produced by the web app.
 
 Request headers:
 
 ```http
 GET /api/me
-Authorization: Bearer <Cognito access token>
+Authorization: Bearer <Cognito ID token>
 ```
 
 Success response (`200 OK`):
@@ -119,13 +124,13 @@ Success response (`200 OK`):
     "email": "<email-if-present-or-null>",
     "given_name": "<first-name-if-present-or-null>",
     "family_name": "<last-name-if-present-or-null>",
-    "token_use": "access"
+    "token_use": "id"
   }
 }
 ```
 
 Notes:
-- `email`, `given_name`, and `family_name` may be `null` because access tokens do not always include profile claims. The frontend supplements these from the ID token in its Amplify session for display purposes.
+- In the final AWS API flow, the frontend sends the Cognito ID token so profile claims such as `email`, `given_name`, and `family_name` are available when Cognito includes them. Earlier proof-service deployments may show a different `token_use` if `COGNITO_TOKEN_USE` is configured differently.
 - The endpoint returns the same machine-readable error shape as `/protected/whoami` for failures.
 
 Missing token response (`401 Unauthorized`):
@@ -144,7 +149,7 @@ Evidence to capture:
 
 - `GET /api/me` without token returning `401`.
 - `GET /api/me` with malformed token returning `403`.
-- `GET /api/me` with a valid Cognito access token returning the sanitized `user` payload.
+- `GET /api/me` with a valid Cognito ID token returning the sanitized `user` payload.
 - Cloud Run log line for the protected request.
 
 ## Auth Middleware Reuse

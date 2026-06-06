@@ -181,28 +181,4 @@
   .media-actions {
     @apply flex shrink-0 flex-wrap items-start justify-start gap-2 lg:justify-end;
   }
-
-  .media-action-menu {
-    @apply relative;
-  }
-
-  .media-action-menu summary {
-    @apply inline-flex h-9 cursor-pointer list-none items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition hover:bg-accent hover:text-accent-foreground;
-  }
-
-  .media-action-menu summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .media-action-menu-list {
-    @apply absolute right-0 z-20 mt-2 grid min-w-52 gap-1 rounded-md border bg-popover p-1 shadow-lg;
-  }
-
-  .media-action-menu-list button {
-    @apply flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm text-popover-foreground transition hover:bg-accent hover:text-accent-foreground;
-  }
-
-  .media-action-menu-list button.destructive {
-    @apply text-destructive hover:bg-destructive hover:text-destructive-foreground;
-  }
 }

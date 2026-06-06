@@ -6,7 +6,6 @@ import {
   FileImage,
   ImageUp,
   Loader2,
-  MoreHorizontal,
   RefreshCcw,
   Search,
   ShieldAlert,
@@ -849,12 +848,6 @@ export function MediaPage() {
                 const itemCanEditTags = canEditMediaTags(item, user?.userId);
                 const itemCanDelete = canDeleteMedia(item, user?.userId);
                 const itemVisibility = mediaVisibility(item);
-                const hasSecondaryActions = Boolean(
-                  item.thumbnailUrl
-                  || item.originalUrl
-                  || (item.mediaType === "image" && item.thumbnailUrl)
-                  || itemCanDelete,
-                );
 
                 return (
                   <article className="media-card" key={item.mediaId}>
@@ -933,42 +926,28 @@ export function MediaPage() {
                       <div className="media-actions">
                         {item.originalUrl && (
                           <Button asChild variant="outline" size="sm">
-                            <a href={item.originalUrl} target="_blank" rel="noreferrer"><ExternalLink /> Open</a>
+                            <a href={item.originalUrl} target="_blank" rel="noreferrer"><ExternalLink /> Open original</a>
                           </Button>
                         )}
-                        {hasSecondaryActions && (
-                          <details className="media-action-menu">
-                            <summary aria-label={`More actions for ${item.mediaId}`}>
-                              <MoreHorizontal className="size-4" />
-                              More
-                            </summary>
-                            <div className="media-action-menu-list">
-                              {item.thumbnailUrl && (
-                                <button type="button" onClick={() => void onCopyUrl("Thumbnail", item.thumbnailUrl)}>
-                                  <Copy className="size-4" /> Copy thumbnail URL
-                                </button>
-                              )}
-                              {item.originalUrl && (
-                                <button type="button" onClick={() => void onCopyUrl("Original", item.originalUrl)}>
-                                  <Copy className="size-4" /> Copy original URL
-                                </button>
-                              )}
-                              {item.mediaType === "image" && item.thumbnailUrl && (
-                                <button type="button" onClick={() => void onThumbnailLookup(item)}>
-                                  <ExternalLink className="size-4" /> Lookup original
-                                </button>
-                              )}
-                              {itemCanDelete && (
-                                <button
-                                  type="button"
-                                  className="destructive"
-                                  onClick={() => setDeleteTarget({ kind: "single", mediaId: item.mediaId })}
-                                >
-                                  <Trash2 className="size-4" /> Delete
-                                </button>
-                              )}
-                            </div>
-                          </details>
+                        {item.thumbnailUrl && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Thumbnail", item.thumbnailUrl)}>
+                            <Copy /> Copy thumb
+                          </Button>
+                        )}
+                        {item.originalUrl && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Original", item.originalUrl)}>
+                            <Copy /> Copy original
+                          </Button>
+                        )}
+                        {item.mediaType === "image" && item.thumbnailUrl && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => void onThumbnailLookup(item)}>
+                            <ExternalLink /> Lookup original
+                          </Button>
+                        )}
+                        {itemCanDelete && (
+                          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTarget({ kind: "single", mediaId: item.mediaId })}>
+                            <Trash2 /> Delete
+                          </Button>
                         )}
                       </div>
                     </div>

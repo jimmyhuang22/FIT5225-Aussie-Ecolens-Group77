@@ -884,8 +884,14 @@ export function MediaPage() {
                             <Badge variant={itemVisibility === "shared" ? "success" : "secondary"}>
                               {itemVisibility === "shared" ? "Shared" : "Private"}
                             </Badge>
+                            <Badge variant={itemVisibility === "shared" && item.allowTagEdit ? "success" : "secondary"}>
+                              {itemVisibility === "shared"
+                                ? item.allowTagEdit
+                                  ? "Others can edit tags"
+                                  : "View only"
+                                : "Owner only"}
+                            </Badge>
                             {!ownedByCurrentUser && <Badge variant="outline">Shared access</Badge>}
-                            {!ownedByCurrentUser && itemCanEditTags && <Badge variant="secondary">Tag edit allowed</Badge>}
                           </div>
                           <p className="break-all text-sm text-muted-foreground">{item.storageObject}</p>
                           <div className="flex flex-wrap gap-1.5">

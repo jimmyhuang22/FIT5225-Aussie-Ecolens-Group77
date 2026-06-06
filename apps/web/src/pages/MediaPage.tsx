@@ -6,6 +6,7 @@ import {
   FileImage,
   ImageUp,
   Loader2,
+  MoreHorizontal,
   RefreshCcw,
   Search,
   ShieldAlert,
@@ -80,6 +81,7 @@ type DeleteTarget =
   | { kind: "subscription"; subscriptionId: string }
   | null;
 type ToolTab = "upload" | "search" | "manage" | "notify";
+type SharingMode = "private" | "shared" | "shared_edit";
 
 const PENDING_MEDIA_STATUSES = new Set(["upload_url_issued", "uploaded", "processing"]);
 
@@ -156,14 +158,12 @@ function toneToAlert(tone: NonNullable<Notice>["tone"]): "default" | "destructiv
   return "info";
 }
 
-function MetricCard({ label, value }: { label: string; value: number }) {
+function SummaryPill({ label, value }: { label: string; value: number }) {
   return (
-    <Card className="bg-white/85">
-      <CardContent className="flex items-center justify-between gap-3 p-4">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="text-2xl font-bold tracking-tight text-emerald-950">{value}</p>
-      </CardContent>
-    </Card>
+    <span className="summary-pill">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </span>
   );
 }
 
@@ -174,6 +174,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
+}
+
+function sharingMode(item: MediaItem): SharingMode {
+  if (mediaVisibility(item) !== "shared") return "private";
+  return item.allowTagEdit ? "shared_edit" : "shared";
 }
 
 export function MediaPage() {
@@ -595,27 +600,27 @@ export function MediaPage() {
 
   return (
     <section className="workspace-page">
-      <div className="rounded-3xl border bg-white/75 p-5 shadow-sm backdrop-blur">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <Badge variant="secondary" className="mb-2">Multi-cloud serverless demo</Badge>
-            <h1 className="text-2xl font-bold tracking-tight text-emerald-950 md:text-3xl">Media workspace</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Signed in as {user?.username ?? "Cognito user"}</p>
+      <div className="workspace-topbar">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-emerald-950">Media workspace</h1>
+            <Badge variant="secondary">Multi-cloud demo</Badge>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
-              {loading ? <Loader2 className="animate-spin" /> : <RefreshCcw />}
-              Refresh
-            </Button>
-          </div>
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            Signed in as {user?.userId ? shortId(user.userId) : user?.username ?? "Cognito user"}
+          </p>
         </div>
-      </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Total media" value={items.length} />
-        <MetricCard label="Processed" value={processedCount} />
-        <MetricCard label="Unique tags" value={tagCount} />
-        <MetricCard label="Subscriptions" value={subscriptions.length} />
+        <div className="workspace-summary">
+          <SummaryPill label="Total" value={items.length} />
+          <SummaryPill label="Processed" value={processedCount} />
+          <SummaryPill label="Tags" value={tagCount} />
+          <SummaryPill label="Subscriptions" value={subscriptions.length} />
+          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
+            {loading ? <Loader2 className="animate-spin" /> : <RefreshCcw />}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {notice && (
@@ -624,8 +629,188 @@ export function MediaPage() {
         </Alert>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
-        <Card className="overflow-hidden">
+      <div className="workspace-layout">
+        <aside className="tool-panel">
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b bg-card/80 p-4">
+              <div>
+                <CardTitle className="text-lg">Tools</CardTitle>
+                <CardDescription>Upload, search, manage tags and subscriptions.</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4">
+              <Tabs value={activeTool} onValueChange={(value) => setActiveTool(value as ToolTab)} className="w-full">
+                <TabsList className="grid h-auto w-full grid-cols-4 gap-1 p-1">
+                  <TabsTrigger value="upload" className="gap-2">
+                    <ImageUp className="size-4" />
+                    <span className="hidden sm:inline">Upload</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="search" className="gap-2">
+                    <Search className="size-4" />
+                    <span className="hidden sm:inline">Search</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="manage" className="gap-2">
+                    <Tags className="size-4" />
+                    <span className="hidden sm:inline">Manage</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="notify" className="gap-2">
+                    <Bell className="size-4" />
+                    <span className="hidden sm:inline">Notify</span>
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="upload" className="mt-5 space-y-5">
+          <div>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                      <ImageUp className="size-5" /> Upload media
+                    </h2>
+          </div>
+                  <form className="space-y-4" onSubmit={onUpload}>
+                    <Field label="Image or video">
+                      <Input type="file" accept="image/*,video/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+                    </Field>
+                    {file && (
+                      <div className="rounded-md border bg-muted/50 p-3 text-sm">
+                        <p className="break-all font-medium">{file.name}</p>
+                        <p className="text-muted-foreground">{Math.max(file.size / 1024 / 1024, 0.01).toFixed(2)} MB</p>
+                      </div>
+                    )}
+                    <Button className="w-full" type="submit" disabled={!file || uploading}>
+                      {uploading ? <Loader2 className="animate-spin" /> : <ImageUp />}
+                      {uploading ? "Uploading..." : "Upload"}
+                    </Button>
+                  </form>
+                </TabsContent>
+
+                <TabsContent value="search" className="mt-5 space-y-4">
+                  <section className="tool-section">
+                    <h2 className="tool-section-title">
+                      <Search className="size-5" /> Search by tag
+                    </h2>
+                    <form className="space-y-4" onSubmit={onSearch}>
+                      <Field label="Tag">
+                        <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="alectura_lathami" />
+                      </Field>
+                      <Button className="w-full" type="submit">Search</Button>
+                    </form>
+                  </section>
+
+                  <Separator />
+
+                  <section className="tool-section">
+                    <h2 className="tool-section-title">
+                      <Tags className="size-5" /> Tag counts
+                    </h2>
+                    <form className="space-y-4" onSubmit={onTagCountSearch}>
+                      <Field label="Query">
+                        <Input value={tagCountQuery} onChange={(event) => setTagCountQuery(event.target.value)} placeholder="dingo:2, cattle:1" />
+                      </Field>
+                      <Button className="w-full" type="submit">Query</Button>
+                    </form>
+                  </section>
+
+                  <Separator />
+
+                  <section className="tool-section">
+                    <h2 className="tool-section-title">
+                      <FileImage className="size-5" /> Query image
+                    </h2>
+                    <form className="space-y-4" onSubmit={onQueryFile}>
+                      <Field label="Image file">
+                        <Input type="file" accept="image/*" onChange={(event) => setQueryFile(event.target.files?.[0] ?? null)} />
+                      </Field>
+                      <Button className="w-full" type="submit" disabled={!queryFile || loading}>Match</Button>
+                    </form>
+                  </section>
+
+                  <Separator />
+
+                  <section className="tool-section">
+                    <h2 className="tool-section-title">Thumbnail lookup</h2>
+                    <form className="space-y-4" onSubmit={onThumbnailUrlLookup}>
+                      <Field label="Thumbnail URL">
+                        <Input value={thumbnailLookupUrl} onChange={(event) => setThumbnailLookupUrl(event.target.value)} placeholder="https://..." type="url" />
+                      </Field>
+                      <Button className="w-full" type="submit" disabled={loading}>Find original</Button>
+                      {thumbnailLookupResult && (
+                        <div className="rounded-md border bg-muted/50 p-3 text-sm">
+                          <p className="font-medium">{shortId(thumbnailLookupResult.mediaId)}</p>
+                          {thumbnailLookupResult.originalUrl ? (
+                            <a href={thumbnailLookupResult.originalUrl} target="_blank" rel="noreferrer">Open original</a>
+                          ) : (
+                            <p className="break-all text-muted-foreground">{thumbnailLookupResult.storageObject}</p>
+                          )}
+                        </div>
+                      )}
+                    </form>
+                  </section>
+                </TabsContent>
+
+                <TabsContent value="manage" className="mt-5 space-y-5">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                      <Tags className="size-5" /> Bulk tags
+                    </h2>
+                  </div>
+                  <form className="space-y-4" onSubmit={onBulkUpdate}>
+                    <Field label="Tags">
+                      <Input value={bulkTags} onChange={(event) => setBulkTags(event.target.value)} placeholder="reviewed, demo" />
+                    </Field>
+                    <Field label="Operation">
+                      <Select value={bulkOperation} onValueChange={(value) => setBulkOperation(value as "1" | "0")}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Add</SelectItem>
+                          <SelectItem value="0">Remove</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Button className="w-full" type="submit" disabled={!selectedCanEditTags}>Apply tag change</Button>
+                  </form>
+                </TabsContent>
+
+                <TabsContent value="notify" className="mt-5 space-y-5">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+                      <Bell className="size-5" /> Notifications
+                    </h2>
+                  </div>
+                  <form className="space-y-4" onSubmit={onCreateSubscription}>
+                    <Field label="Email">
+                      <Input value={subscriptionEmail} onChange={(event) => setSubscriptionEmail(event.target.value)} placeholder="name@example.com" type="email" />
+                    </Field>
+                    <Field label="Tags">
+                      <Input value={subscriptionTags} onChange={(event) => setSubscriptionTags(event.target.value)} placeholder="alectura_lathami, felis_catus" />
+                    </Field>
+                    <Button className="w-full" type="submit">Subscribe</Button>
+                  </form>
+
+                  <div className="space-y-3">
+                    {subscriptions.map((subscription) => (
+                      <div className="rounded-md border p-3" key={subscription.subscriptionId}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <p className="break-all text-sm font-medium">{subscription.email}</p>
+                            <p className="break-all text-xs text-muted-foreground">{subscription.tags.join(", ")}</p>
+                            {subscription.snsStatus && <Badge variant="secondary">SNS: {subscription.snsStatus}</Badge>}
+                          </div>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget({ kind: "subscription", subscriptionId: subscription.subscriptionId })}>
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {subscriptions.length === 0 && (
+                      <div className="rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">No active subscriptions.</div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </aside>
+
+        <Card className="order-1 overflow-hidden lg:order-2">
           <CardHeader className="border-b bg-gradient-to-r from-emerald-50 to-background p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -663,9 +848,15 @@ export function MediaPage() {
                 const itemCanEditTags = canEditMediaTags(item, user?.userId);
                 const itemCanDelete = canDeleteMedia(item, user?.userId);
                 const itemVisibility = mediaVisibility(item);
+                const hasSecondaryActions = Boolean(
+                  item.thumbnailUrl
+                  || item.originalUrl
+                  || (item.mediaType === "image" && item.thumbnailUrl)
+                  || itemCanDelete,
+                );
 
                 return (
-                  <article className="rounded-xl border bg-card p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md" key={item.mediaId}>
+                  <article className="media-card" key={item.mediaId}>
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="flex min-w-0 gap-4">
                         <Checkbox
@@ -711,60 +902,72 @@ export function MediaPage() {
                             </Alert>
                           )}
                           {ownedByCurrentUser && (
-                            <div className="flex flex-wrap gap-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                              <label className="flex items-center gap-2">
-                                <Checkbox
-                                  checked={itemVisibility === "shared"}
-                                  onCheckedChange={(checked) =>
-                                    void onUpdateSharing(
-                                      item,
-                                      checked === true ? "shared" : "private",
-                                      checked === true ? item.allowTagEdit : false,
-                                    )
-                                  }
-                                />
-                                Shared
-                              </label>
-                              <label className="flex items-center gap-2">
-                                <Checkbox
-                                  checked={itemVisibility === "shared" && item.allowTagEdit}
-                                  disabled={itemVisibility !== "shared"}
-                                  onCheckedChange={(checked) =>
-                                    void onUpdateSharing(item, "shared", checked === true)
-                                  }
-                                />
-                                Allow tag edit
-                              </label>
+                            <div className="sharing-control">
+                              <span>Sharing</span>
+                              <Select
+                                value={sharingMode(item)}
+                                onValueChange={(value) => {
+                                  const mode = value as SharingMode;
+                                  void onUpdateSharing(
+                                    item,
+                                    mode === "private" ? "private" : "shared",
+                                    mode === "shared_edit",
+                                  );
+                                }}
+                              >
+                                <SelectTrigger className="h-8 w-full sm:w-44">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="private">Private</SelectItem>
+                                  <SelectItem value="shared">Shared</SelectItem>
+                                  <SelectItem value="shared_edit">Shared + tag edit</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+                      <div className="media-actions">
                         {item.originalUrl && (
                           <Button asChild variant="outline" size="sm">
                             <a href={item.originalUrl} target="_blank" rel="noreferrer"><ExternalLink /> Open</a>
                           </Button>
                         )}
-                        {item.thumbnailUrl && (
-                          <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Thumbnail", item.thumbnailUrl)}>
-                            <Copy /> Thumbnail
-                          </Button>
-                        )}
-                        {item.originalUrl && (
-                          <Button type="button" variant="outline" size="sm" onClick={() => void onCopyUrl("Original", item.originalUrl)}>
-                            <Copy /> Original
-                          </Button>
-                        )}
-                        {item.mediaType === "image" && item.thumbnailUrl && (
-                          <Button type="button" variant="outline" size="sm" onClick={() => void onThumbnailLookup(item)}>
-                            Lookup original
-                          </Button>
-                        )}
-                        {itemCanDelete && (
-                          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTarget({ kind: "single", mediaId: item.mediaId })}>
-                            <Trash2 /> Delete
-                          </Button>
+                        {hasSecondaryActions && (
+                          <details className="media-action-menu">
+                            <summary aria-label={`More actions for ${item.mediaId}`}>
+                              <MoreHorizontal className="size-4" />
+                              More
+                            </summary>
+                            <div className="media-action-menu-list">
+                              {item.thumbnailUrl && (
+                                <button type="button" onClick={() => void onCopyUrl("Thumbnail", item.thumbnailUrl)}>
+                                  <Copy className="size-4" /> Copy thumbnail URL
+                                </button>
+                              )}
+                              {item.originalUrl && (
+                                <button type="button" onClick={() => void onCopyUrl("Original", item.originalUrl)}>
+                                  <Copy className="size-4" /> Copy original URL
+                                </button>
+                              )}
+                              {item.mediaType === "image" && item.thumbnailUrl && (
+                                <button type="button" onClick={() => void onThumbnailLookup(item)}>
+                                  <ExternalLink className="size-4" /> Lookup original
+                                </button>
+                              )}
+                              {itemCanDelete && (
+                                <button
+                                  type="button"
+                                  className="destructive"
+                                  onClick={() => setDeleteTarget({ kind: "single", mediaId: item.mediaId })}
+                                >
+                                  <Trash2 className="size-4" /> Delete
+                                </button>
+                              )}
+                            </div>
+                          </details>
                         )}
                       </div>
                     </div>
@@ -784,205 +987,6 @@ export function MediaPage() {
           </CardContent>
         </Card>
 
-        <aside className="space-y-4 xl:sticky xl:top-24">
-          <Card className="overflow-hidden">
-            <CardHeader className="border-b bg-card/80 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <Badge variant="secondary" className="mb-2">Workflow tools</Badge>
-                  <CardTitle>Actions</CardTitle>
-                  <CardDescription>
-                    Switch between upload, search, media management and notification tools.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-5">
-              <Tabs value={activeTool} onValueChange={(value) => setActiveTool(value as ToolTab)} className="w-full">
-                <TabsList className="grid h-auto w-full grid-cols-4 gap-1 p-1">
-                  <TabsTrigger value="upload" className="gap-2">
-                    <ImageUp className="size-4" />
-                    <span className="hidden sm:inline">Upload</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="search" className="gap-2">
-                    <Search className="size-4" />
-                    <span className="hidden sm:inline">Search</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="manage" className="gap-2">
-                    <Tags className="size-4" />
-                    <span className="hidden sm:inline">Manage</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="notify" className="gap-2">
-                    <Bell className="size-4" />
-                    <span className="hidden sm:inline">Notify</span>
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="upload" className="mt-5 space-y-5">
-                  <div>
-                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
-                      <ImageUp className="size-5" /> Upload media
-                    </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">Upload image or short video media to S3.</p>
-                  </div>
-                  <form className="space-y-4" onSubmit={onUpload}>
-                    <Field label="Image or video">
-                      <Input type="file" accept="image/*,video/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-                    </Field>
-                    {file && (
-                      <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-                        <p className="font-medium break-all">{file.name}</p>
-                        <p className="text-muted-foreground">{Math.max(file.size / 1024 / 1024, 0.01).toFixed(2)} MB</p>
-                      </div>
-                    )}
-                    <Button className="w-full" type="submit" disabled={!file || uploading}>
-                      {uploading ? <Loader2 className="animate-spin" /> : <ImageUp />}
-                      {uploading ? "Uploading..." : "Upload"}
-                    </Button>
-                  </form>
-                </TabsContent>
-
-                <TabsContent value="search" className="mt-5 space-y-6">
-                  <section className="space-y-4 rounded-xl border bg-background/70 p-4 shadow-sm">
-                    <div>
-                      <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
-                        <Search className="size-5" /> Search by tag
-                      </h2>
-                      <p className="mt-1 text-sm text-muted-foreground">Find media containing one species tag.</p>
-                    </div>
-                    <form className="space-y-4" onSubmit={onSearch}>
-                      <Field label="Tag">
-                        <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="alectura_lathami" />
-                      </Field>
-                      <Button className="w-full" type="submit">Search</Button>
-                    </form>
-                  </section>
-
-                  <Separator />
-
-                  <section className="space-y-4 rounded-xl border bg-background/70 p-4 shadow-sm">
-                    <div>
-                      <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
-                        <Tags className="size-5" /> Tag counts
-                      </h2>
-                      <p className="mt-1 text-sm text-muted-foreground">Use AND semantics with minimum counts.</p>
-                    </div>
-                    <form className="space-y-4" onSubmit={onTagCountSearch}>
-                      <Field label="Query">
-                        <Input value={tagCountQuery} onChange={(event) => setTagCountQuery(event.target.value)} placeholder="dingo:2, cattle:1" />
-                      </Field>
-                      <Button className="w-full" type="submit">Query</Button>
-                    </form>
-                  </section>
-
-                  <Separator />
-
-                  <section className="space-y-4 rounded-xl border bg-background/70 p-4 shadow-sm">
-                    <div>
-                      <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
-                        <FileImage className="size-5" /> Query image
-                      </h2>
-                      <p className="mt-1 text-sm text-muted-foreground">Analyze a temporary image without storing it.</p>
-                    </div>
-                    <form className="space-y-4" onSubmit={onQueryFile}>
-                      <Field label="Image file">
-                        <Input type="file" accept="image/*" onChange={(event) => setQueryFile(event.target.files?.[0] ?? null)} />
-                      </Field>
-                      <Button className="w-full" type="submit" disabled={!queryFile || loading}>Match</Button>
-                    </form>
-                  </section>
-
-                  <Separator />
-
-                  <section className="space-y-4 rounded-xl border bg-background/70 p-4 shadow-sm">
-                    <div>
-                      <h2 className="text-lg font-semibold text-emerald-950">Thumbnail lookup</h2>
-                      <p className="mt-1 text-sm text-muted-foreground">Resolve a thumbnail URL to its original image.</p>
-                    </div>
-                    <form className="space-y-4" onSubmit={onThumbnailUrlLookup}>
-                      <Field label="Thumbnail URL">
-                        <Input value={thumbnailLookupUrl} onChange={(event) => setThumbnailLookupUrl(event.target.value)} placeholder="https://..." type="url" />
-                      </Field>
-                      <Button className="w-full" type="submit" disabled={loading}>Find original</Button>
-                      {thumbnailLookupResult && (
-                        <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-                          <p className="font-medium">{shortId(thumbnailLookupResult.mediaId)}</p>
-                          {thumbnailLookupResult.originalUrl ? (
-                            <a href={thumbnailLookupResult.originalUrl} target="_blank" rel="noreferrer">Open original</a>
-                          ) : (
-                            <p className="break-all text-muted-foreground">{thumbnailLookupResult.storageObject}</p>
-                          )}
-                        </div>
-                      )}
-                    </form>
-                  </section>
-                </TabsContent>
-
-                <TabsContent value="manage" className="mt-5 space-y-5">
-                  <div>
-                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
-                      <Tags className="size-5" /> Bulk tags
-                    </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">Add or remove tags from selected media.</p>
-                  </div>
-                  <form className="space-y-4" onSubmit={onBulkUpdate}>
-                    <Field label="Tags">
-                      <Input value={bulkTags} onChange={(event) => setBulkTags(event.target.value)} placeholder="reviewed, demo" />
-                    </Field>
-                    <Field label="Operation">
-                      <Select value={bulkOperation} onValueChange={(value) => setBulkOperation(value as "1" | "0")}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">Add</SelectItem>
-                          <SelectItem value="0">Remove</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Button className="w-full" type="submit" disabled={!selectedCanEditTags}>Apply tag change</Button>
-                  </form>
-                </TabsContent>
-
-                <TabsContent value="notify" className="mt-5 space-y-5">
-                  <div>
-                    <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
-                      <Bell className="size-5" /> Notifications
-                    </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">Subscribe to owner-scoped tag notifications.</p>
-                  </div>
-                  <form className="space-y-4" onSubmit={onCreateSubscription}>
-                    <Field label="Email">
-                      <Input value={subscriptionEmail} onChange={(event) => setSubscriptionEmail(event.target.value)} placeholder="name@example.com" type="email" />
-                    </Field>
-                    <Field label="Tags">
-                      <Input value={subscriptionTags} onChange={(event) => setSubscriptionTags(event.target.value)} placeholder="alectura_lathami, felis_catus" />
-                    </Field>
-                    <Button className="w-full" type="submit">Subscribe</Button>
-                  </form>
-
-                  <div className="space-y-3">
-                    {subscriptions.map((subscription) => (
-                      <div className="rounded-lg border p-3" key={subscription.subscriptionId}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 space-y-1">
-                            <p className="break-all text-sm font-medium">{subscription.email}</p>
-                            <p className="break-all text-xs text-muted-foreground">{subscription.tags.join(", ")}</p>
-                            {subscription.snsStatus && <Badge variant="secondary">SNS: {subscription.snsStatus}</Badge>}
-                          </div>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget({ kind: "subscription", subscriptionId: subscription.subscriptionId })}>
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {subscriptions.length === 0 && (
-                      <div className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">No active subscriptions.</div>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </aside>
       </div>
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>

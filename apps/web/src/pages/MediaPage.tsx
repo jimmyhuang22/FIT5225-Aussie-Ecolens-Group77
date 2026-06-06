@@ -233,6 +233,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function DetailRow({ label, value }: { label: string; value: string | boolean | null | undefined }) {
+  const displayValue = typeof value === "boolean" ? (value ? "Yes" : "No") : value || "Not available";
+  const urlValue = typeof value === "string" && /^https?:\/\//.test(value) ? value : "";
+  return (
+    <div className="grid gap-1 rounded-md border bg-muted/30 p-3 sm:grid-cols-[8rem_1fr]">
+      <dt className="text-xs font-semibold uppercase text-muted-foreground">{label}</dt>
+      <dd className="break-all text-sm text-foreground">
+        {urlValue ? (
+          <a href={urlValue} target="_blank" rel="noreferrer">
+            {urlValue}
+          </a>
+        ) : (
+          displayValue
+        )}
+      </dd>
+    </div>
+  );
+}
+
 function sharingMode(item: MediaItem): SharingMode {
   if (mediaVisibility(item) !== "shared") return "private";
   return item.allowTagEdit ? "shared_edit" : "shared";
@@ -1002,7 +1021,6 @@ export function MediaPage() {
                             </Badge>
                             {!ownedByCurrentUser && <Badge variant="outline">Shared access</Badge>}
                           </div>
-                          <p className="break-all text-sm text-muted-foreground">{item.storageObject}</p>
                           <div className="flex flex-wrap gap-1.5">
                             {Object.entries(item.tagCounts || {}).length === 0 ? (
                               <Badge variant="secondary">No tags yet</Badge>
@@ -1012,7 +1030,22 @@ export function MediaPage() {
                               ))
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground">Model: {item.modelVersion}</p>
+                          <details className="group rounded-md border bg-background/70 p-3">
+                            <summary className="cursor-pointer text-sm font-semibold text-emerald-950">
+                              Details
+                            </summary>
+                            <dl className="mt-3 grid gap-2">
+                              <DetailRow label="Owner" value={item.ownerSub} />
+                              <DetailRow label="Visibility" value={itemVisibility === "shared" ? "Shared" : "Private"} />
+                              <DetailRow label="Allow tag edit" value={item.allowTagEdit} />
+                              <DetailRow label="Original URL" value={item.originalUrl} />
+                              <DetailRow label="Thumbnail URL" value={item.thumbnailUrl} />
+                              <DetailRow label="Checksum" value={item.checksumSha256} />
+                              <DetailRow label="Model version" value={item.modelVersion} />
+                              <DetailRow label="Created at" value={item.createdAt} />
+                              <DetailRow label="Updated at" value={item.updatedAt} />
+                            </dl>
+                          </details>
                           {item.status === "failed" && item.processingError && (
                             <Alert variant="destructive" className="mt-2">
                               <ShieldAlert className="size-4" />

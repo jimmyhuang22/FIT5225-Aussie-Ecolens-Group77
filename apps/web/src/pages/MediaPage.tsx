@@ -683,7 +683,7 @@ export function MediaPage() {
                   </form>
                 </TabsContent>
 
-                <TabsContent value="search" className="mt-5 space-y-4">
+                <TabsContent value="search" className="tool-grid mt-5">
                   <section className="tool-section">
                     <h2 className="tool-section-title">
                       <Search className="size-5" /> Search by tag
@@ -696,7 +696,7 @@ export function MediaPage() {
                     </form>
                   </section>
 
-                  <Separator />
+                  <Separator className="tool-separator" />
 
                   <section className="tool-section">
                     <h2 className="tool-section-title">
@@ -710,7 +710,7 @@ export function MediaPage() {
                     </form>
                   </section>
 
-                  <Separator />
+                  <Separator className="tool-separator" />
 
                   <section className="tool-section">
                     <h2 className="tool-section-title">
@@ -724,7 +724,7 @@ export function MediaPage() {
                     </form>
                   </section>
 
-                  <Separator />
+                  <Separator className="tool-separator" />
 
                   <section className="tool-section">
                     <h2 className="tool-section-title">Thumbnail lookup</h2>
@@ -811,7 +811,7 @@ export function MediaPage() {
           </Card>
         </aside>
 
-        <Card className="order-1 overflow-hidden lg:order-2">
+        <Card className="overflow-hidden">
           <CardHeader className="border-b bg-gradient-to-r from-emerald-50 to-background p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -843,7 +843,7 @@ export function MediaPage() {
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-5">
-            <div className={items.length > 0 ? "max-h-[calc(100vh-18rem)] space-y-3 overflow-y-auto pr-1" : "space-y-3"}>
+            <div className="space-y-3">
               {items.map((item) => {
                 const ownedByCurrentUser = isMediaOwner(item, user?.userId);
                 const itemCanEditTags = canEditMediaTags(item, user?.userId);

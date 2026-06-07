@@ -85,7 +85,7 @@ export function SignUpPage() {
               autoComplete="new-password"
               aria-describedby="sign-up-password-requirements"
             />
-            <PasswordRequirements id="sign-up-password-requirements" />
+            <PasswordRequirements id="sign-up-password-requirements" password={password} />
           </div>
 
           {error && (

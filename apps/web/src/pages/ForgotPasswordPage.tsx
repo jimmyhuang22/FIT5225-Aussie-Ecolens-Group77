@@ -160,7 +160,7 @@ export function ForgotPasswordPage() {
                 autoComplete="new-password"
                 aria-describedby="reset-password-requirements"
               />
-              <PasswordRequirements id="reset-password-requirements" />
+              <PasswordRequirements id="reset-password-requirements" password={newPassword} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-new-password">Confirm new password</Label>

@@ -59,6 +59,7 @@
 
   html {
     scrollbar-gutter: stable both-edges;
+    overflow-y: scroll;
   }
 
   body {
@@ -69,6 +70,8 @@
 
   body[data-scroll-locked] {
     margin-right: 0 !important;
+    padding-right: 0 !important;
+    overflow-y: scroll !important;
   }
 
   a {

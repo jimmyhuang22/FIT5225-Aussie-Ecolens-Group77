@@ -13,6 +13,7 @@ export interface AuthUser {
   userId: string;
   username: string;
   email: string | null;
+  displayName: string;
 }
 
 interface AuthState {
@@ -32,8 +33,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const current = await getCurrentUser();
       const session = await fetchAuthSession();
-      const email = String(session.tokens?.idToken?.payload.email ?? "").trim() || null;
-      setUser({ userId: current.userId, username: current.username, email });
+      const payload = session.tokens?.idToken?.payload ?? {};
+      const email = String(payload.email ?? "").trim() || null;
+      const givenName = String(payload.given_name ?? "").trim();
+      const familyName = String(payload.family_name ?? "").trim();
+      const displayName =
+        [givenName, familyName].filter(Boolean).join(" ") ||
+        email ||
+        current.username;
+      setUser({ userId: current.userId, username: current.username, email, displayName });
     } catch {
       setUser(null);
     } finally {

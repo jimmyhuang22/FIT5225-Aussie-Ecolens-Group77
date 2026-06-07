@@ -997,6 +997,9 @@ export function MediaPage() {
                 const itemCanEditTags = canEditMediaTags(item, user?.userId);
                 const itemCanDelete = canDeleteMedia(item, user?.userId);
                 const itemVisibility = mediaVisibility(item);
+                const ownerDisplay = ownedByCurrentUser
+                  ? user?.displayName || user?.email || "You"
+                  : `Shared user (${shortId(item.ownerSub)})`;
 
                 return (
                   <article className="media-card" key={item.mediaId}>
@@ -1047,7 +1050,7 @@ export function MediaPage() {
                               Details
                             </summary>
                             <dl className="mt-3 grid gap-2">
-                              <DetailRow label="Owner" value={item.ownerSub} />
+                              <DetailRow label="Owner" value={ownerDisplay} />
                               <DetailRow label="Visibility" value={itemVisibility === "shared" ? "Shared" : "Private"} />
                               <DetailRow label="Allow tag edit" value={item.allowTagEdit} />
                               <DetailRow label="Original URL" value={item.originalUrl} />

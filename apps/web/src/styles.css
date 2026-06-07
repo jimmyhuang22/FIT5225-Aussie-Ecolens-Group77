@@ -58,13 +58,17 @@
   }
 
   html {
-    scrollbar-gutter: stable;
+    scrollbar-gutter: stable both-edges;
   }
 
   body {
-    @apply m-0 min-h-screen bg-background text-foreground antialiased;
+    @apply m-0 min-h-screen overflow-y-scroll bg-background text-foreground antialiased;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
       "Segoe UI", sans-serif;
+  }
+
+  body[data-scroll-locked] {
+    margin-right: 0 !important;
   }
 
   a {

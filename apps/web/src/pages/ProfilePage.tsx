@@ -87,17 +87,17 @@ export function ProfilePage() {
           <div className="overflow-hidden rounded-lg border">
             <dl className="divide-y">
               {[
-                ["sub", display(data.user.sub)],
-                ["username", display(data.user.username)],
-                ["email", display(data.user.email)],
-                ["given_name", display(data.user.given_name)],
-                ["family_name", display(data.user.family_name)],
-                ["token_use", display(data.user.token_use)],
+                ["Sub", display(data.user.sub)],
+                ["Username", display(data.user.username)],
+                ["Email", display(data.user.email)],
+                ["Given Name", display(data.user.given_name)],
+                ["Family Name", display(data.user.family_name)],
+                ["Token Use", display(data.user.token_use)],
               ].map(([key, value]) => (
                 <div className="grid gap-2 p-4 sm:grid-cols-[10rem_1fr]" key={key}>
                   <dt className="font-medium text-muted-foreground">{key}</dt>
                   <dd className="break-all">
-                    {key === "token_use" ? <Badge variant="secondary">{value}</Badge> : value}
+                    {key === "Token Use" ? <Badge variant="secondary">{value}</Badge> : value}
                   </dd>
                 </div>
               ))}

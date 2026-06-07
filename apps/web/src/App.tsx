@@ -2,7 +2,6 @@
 import { signOut } from "aws-amplify/auth";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
@@ -40,9 +39,9 @@ function Shell() {
             <>
               <Link to="/media">Media</Link>
               <Link to="/profile">Profile</Link>
-              <Button type="button" variant="ghost" size="sm" onClick={onSignOut}>
+              <button type="button" className="nav-button" onClick={onSignOut}>
                 Sign Out
-              </Button>
+              </button>
             </>
           ) : (
             <>

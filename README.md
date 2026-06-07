@@ -129,8 +129,8 @@ Prerequisites:
 Install frontend dependencies:
 
 ```powershell
-git clone https://github.com/jimmyhuang22/FIT5225-Aussie-EcoLens.git
-Set-Location FIT5225-Aussie-EcoLens
+git clone https://github.com/jimmyhuang22/FIT5225-Aussie-Ecolens-Group77.git
+Set-Location FIT5225-Aussie-Ecolens-Group77
 npm run web:install
 ```
 

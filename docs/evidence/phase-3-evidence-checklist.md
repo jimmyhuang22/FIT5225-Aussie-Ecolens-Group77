@@ -1,14 +1,14 @@
 # Phase 3 Evidence Checklist
 
-Use this checklist while executing and demoing the Phase 3 ML inference service. Redact bucket names you treat as sensitive, raw ID tokens, GCS signed URLs with embedded credentials, and any service account JSON before sharing screenshots.
+Use this checklist while executing and demoing the Phase 3 ML inference service. Redact bucket names you treat as sensitive, raw ID tokens, GCS signed URLs with embedded credentials, and any service account JSON before sharing screenshots. Status values separate code/config readiness from live model evidence that still needs to be captured.
 
 ## Requirement Coverage
 
 | Item | Evidence needed | Status |
 |------|-----------------|--------|
-| `ML-01` | Cloud Run container log line "Loading MegaDetector from ..." + "Loading SpeciesNet from ..." + "Inference service ready" with non-zero model file sizes, AND a `/inference` `200 OK` response on at least one supplied `test_images/*.JPG` that returns at least one detection with a valid species_key | Pending |
-| `ML-02` | Cloud Run service detail screenshot showing `MODEL_PATH_MD`, `MODEL_PATH_SPECIES`, `LABELS_PATH`, `MODEL_VERSION_MD`, `MODEL_VERSION_SPECIES` in the env vars panel + a `git grep` showing the same identifiers come from env, never hardcoded | Pending live; code review verified |
-| `ML-03` | `/inference` response body shows the `model_version` field containing the configured combined version string (e.g. `speciesnet-au-v1+mdv5a-v1`); Phase 4 will store this verbatim on `media_items.modelVersion` | Pending live; code review verified |
+| `ML-01` | Cloud Run container log line "Loading MegaDetector from ..." + "Loading SpeciesNet from ..." + "Inference service ready" with non-zero model file sizes, AND a `/inference` `200 OK` response on at least one supplied `test_images/*.JPG` that returns at least one detection with a valid species_key | Deployed; capture live model evidence |
+| `ML-02` | Cloud Run service detail screenshot showing `MODEL_PATH_MD`, `MODEL_PATH_SPECIES`, `LABELS_PATH`, `MODEL_VERSION_MD`, `MODEL_VERSION_SPECIES` in the env vars panel + a `git grep` showing the same identifiers come from env, never hardcoded | Code verified; capture live console evidence |
+| `ML-03` | `/inference` response body shows the `model_version` field containing the configured combined version string (e.g. `speciesnet-au-v1+mdv5a-v1`); the AWS processor/API stores this value on `media.modelVersion` | Code verified; capture live API evidence |
 
 ## Decision Coverage
 

@@ -1,42 +1,42 @@
 # Phase 2 Evidence Checklist
 
-Use this checklist while executing and demoing the Phase 2 Cognito sign-up / confirm / sign-in / sign-out flow plus the protected `/api/me` API. Redact raw JWTs, emails, account IDs, passwords, and secret values before sharing screenshots.
+Use this checklist while executing and demoing the Phase 2 Cognito sign-up / confirm / sign-in / sign-out flow plus the protected `/api/me` API. Redact raw JWTs, emails, account IDs, passwords, and secret values before sharing screenshots. Status values separate implemented code/docs from live screenshots that still need to be captured.
 
 ## Requirement Coverage
 
 | Item | Evidence needed | Status |
 |------|-----------------|--------|
-| `ARCH-02` | curl/Postman screenshot of `/api/me` returning `200` with the `user` payload for a valid Cognito ID token | Pending |
-| `AUTH-01` | Cognito user pool overview screenshot showing email verification + PreSignUp trigger screenshot showing server-side enforcement of `email`, `given_name`, `family_name` + `apps/web` sign-up form screenshot showing email + first name + last name + password fields + confirmed user record screenshot | Pending |
-| `AUTH-02` | Sign-in success screenshot from `apps/web` (Profile page loaded) + Sign Out screenshot showing redirect to `/sign-in` + Cognito-side evidence that global sign-out revoked the refresh token | Pending |
-| `AUTH-03` | Browser request to `apps/web/profile` while unauthenticated showing redirect to `/sign-in` + direct `GET /api/me` (curl) returning `401` | Pending |
-| `AUTH-04` | curl/Postman screenshots of `/api/me` returning `401` (no token) and `403` (malformed token) | Pending |
+| `ARCH-02` | curl/Postman screenshot of `/api/me` returning `200` with the `user` payload for a valid Cognito ID token | Implemented; capture live API evidence |
+| `AUTH-01` | Cognito user pool overview screenshot showing email verification + PreSignUp trigger screenshot showing server-side enforcement of `email`, `given_name`, `family_name` + `apps/web` sign-up form screenshot showing email + first name + last name + password fields + confirmed user record screenshot | Implemented; capture live screenshots |
+| `AUTH-02` | Sign-in success screenshot from `apps/web` (Profile page loaded) + Sign Out screenshot showing redirect to `/sign-in` + Cognito-side evidence that global sign-out revoked the refresh token | Implemented; capture live screenshots |
+| `AUTH-03` | Browser request to `apps/web/profile` while unauthenticated showing redirect to `/sign-in` + direct `GET /api/me` (curl) returning `401` | Implemented; capture live screenshots/API evidence |
+| `AUTH-04` | curl/Postman screenshots of `/api/me` returning `401` (no token) and `403` (malformed token) | Implemented; capture live API evidence |
 
 ## Decision Coverage
 
 | Decision | Evidence needed | Status |
 |----------|-----------------|--------|
-| `D2-01` | Cognito user pool screenshot showing `email` as required, plus Lambda trigger screenshot showing PreSignUp enforcement for `email`, `given_name`, and `family_name`. Existing Cognito pools cannot switch standard attributes between required and optional after creation without creating a new pool. | Pending |
-| `D2-02` | Verification code email screenshot (redact email address) | Pending |
-| `D2-03` | Cognito SPA app client screenshot (no client secret visible) | Pending |
+| `D2-01` | Cognito user pool screenshot showing `email` as required, plus Lambda trigger screenshot showing PreSignUp enforcement for `email`, `given_name`, and `family_name`. Existing Cognito pools cannot switch standard attributes between required and optional after creation without creating a new pool. | Implemented; capture live console screenshots |
+| `D2-02` | Verification code email screenshot (redact email address) | Live evidence to capture |
+| `D2-03` | Cognito SPA app client screenshot (no client secret visible) | Live evidence to capture |
 | `D2-05` | `apps/web/package.json` listing `aws-amplify` dependency (already committed) | Done |
 | `D2-06` | `apps/web/src/pages/SignUpPage.tsx` calls Amplify `signUp` (already committed) | Done |
 | `D2-08` | `services/auth-proof/.env.example` sets `COGNITO_TOKEN_USE=access` (already committed) | Done |
 | `D2-09` | `apps/web/src/pages/ProfilePage.tsx` calls `signOut({ global: true })` (already committed) | Done |
 | `D2-11` | `services/auth-proof/src/server.js` extended in place — directory name preserved (already committed) | Done |
 | `D2-12` | `services/auth-proof/src/middleware/requireCognitoAuth.js` exists and is wired into `/protected/whoami` and `/api/me` (already committed) | Done |
-| `D2-13` | `/api/me` returns `{ user: {...} }` payload (verified locally; live evidence pending real token) | Partial |
+| `D2-13` | `/api/me` returns `{ user: {...} }` payload (verified locally; capture a live token-backed response for final evidence) | Implemented; live evidence to capture |
 | `D2-14` | `/protected/whoami` still returns Phase 1 shape after refactor (verified locally) | Done |
 | `D2-15` | CORS preflight from `http://localhost:5173` returns `Access-Control-Allow-Origin: http://localhost:5173` (verified locally) | Done |
-| `D2-17` | `apps/web/` directory listing screenshot showing Vite + React + Amplify structure | Pending |
-| `D2-18` | `apps/web/profile` rendering live `/api/me` response | Pending |
+| `D2-17` | `apps/web/` directory listing screenshot showing Vite + React + Amplify structure | Done; optional screenshot to capture |
+| `D2-18` | `apps/web/profile` rendering live `/api/me` response | Implemented; capture live screenshot |
 | `D2-19` | `apps/web/.env.example` lists the four `VITE_*` keys (already committed) | Done |
 | `D2-20` | `apps/web` running on `localhost:5173` only — no production deployment in Phase 2 (already committed) | Done |
 | `D2-21` | This evidence checklist exists (this file) | Done |
-| `D2-22` | Every screenshot in this checklist applies the redaction rules below | Pending per screenshot |
+| `D2-22` | Every screenshot in this checklist applies the redaction rules below | Apply during evidence capture |
 | `D2-23` | `docs/repo-structure.md` table shows `apps/web/`, `services/auth-proof/src/middleware/` (already committed) | Done |
 | `D2-24` | Git history shows commits touching only `apps/web/**`, `services/auth-proof/**`, `docs/**`, `README.md` for Phase 2 (verifiable with `git log`) | Done |
-| `D2-25` | No `git push` from the user's machine during Phase 2 until explicitly approved | Pending user approval |
+| `D2-25` | No `git push` from the user's machine during Phase 2 until explicitly approved | Superseded by approved remote pushes |
 
 ## API Proof Checklist
 

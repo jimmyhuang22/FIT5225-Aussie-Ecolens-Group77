@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordRequirements } from "@/components/PasswordRequirements";
 
 interface ForgotPasswordLocationState {
   email?: string;
@@ -157,7 +158,9 @@ export function ForgotPasswordPage() {
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 autoComplete="new-password"
+                aria-describedby="reset-password-requirements"
               />
+              <PasswordRequirements id="reset-password-requirements" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-new-password">Confirm new password</Label>

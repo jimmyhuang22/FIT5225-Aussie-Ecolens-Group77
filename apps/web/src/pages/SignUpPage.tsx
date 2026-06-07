@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordRequirements } from "@/components/PasswordRequirements";
 
 export function SignUpPage() {
   const navigate = useNavigate();
@@ -75,7 +76,16 @@ export function SignUpPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+            <Input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              aria-describedby="sign-up-password-requirements"
+            />
+            <PasswordRequirements id="sign-up-password-requirements" />
           </div>
 
           {error && (

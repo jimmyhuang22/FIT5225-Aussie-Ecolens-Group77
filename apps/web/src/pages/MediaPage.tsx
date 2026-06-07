@@ -139,6 +139,19 @@ function shortId(id: string): string {
   return id.length > 16 ? `${id.slice(0, 10)}...${id.slice(-6)}` : id;
 }
 
+function shortUrlLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const cleanPath = parsed.pathname.split("/").filter(Boolean);
+    const fileName = decodeURIComponent(cleanPath.at(-1) ?? "");
+    const shortFileName =
+      fileName.length > 34 ? `${fileName.slice(0, 18)}...${fileName.slice(-12)}` : fileName;
+    return shortFileName ? `${parsed.hostname}/.../${shortFileName}` : parsed.hostname;
+  } catch {
+    return url.length > 44 ? `${url.slice(0, 24)}...${url.slice(-16)}` : url;
+  }
+}
+
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return count === 1 ? singular : plural;
 }
@@ -233,17 +246,39 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string | boolean | null | undefined }) {
+function DetailRow({
+  label,
+  value,
+  onCopyUrl,
+}: {
+  label: string;
+  value: string | boolean | null | undefined;
+  onCopyUrl?: (label: string, url: string) => void;
+}) {
   const displayValue = typeof value === "boolean" ? (value ? "Yes" : "No") : value || "Not available";
   const urlValue = typeof value === "string" && /^https?:\/\//.test(value) ? value : "";
   return (
     <div className="grid gap-1 rounded-md border bg-muted/30 p-3 sm:grid-cols-[8rem_1fr]">
       <dt className="text-xs font-semibold uppercase text-muted-foreground">{label}</dt>
-      <dd className="break-all text-sm text-foreground">
+      <dd className="text-sm text-foreground">
         {urlValue ? (
-          <a href={urlValue} target="_blank" rel="noreferrer">
-            {urlValue}
-          </a>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span className="min-w-0 truncate text-muted-foreground" title={urlValue}>
+              {shortUrlLabel(urlValue)}
+            </span>
+            <span className="flex shrink-0 gap-2">
+              <Button asChild variant="outline" size="sm">
+                <a href={urlValue} target="_blank" rel="noreferrer">
+                  <ExternalLink /> Open
+                </a>
+              </Button>
+              {onCopyUrl && (
+                <Button type="button" variant="outline" size="sm" onClick={() => onCopyUrl(label, urlValue)}>
+                  <Copy /> Copy
+                </Button>
+              )}
+            </span>
+          </div>
         ) : (
           displayValue
         )}
@@ -1053,8 +1088,8 @@ export function MediaPage() {
                               <DetailRow label="Owner" value={ownerDisplay} />
                               <DetailRow label="Visibility" value={itemVisibility === "shared" ? "Shared" : "Private"} />
                               <DetailRow label="Allow tag edit" value={item.allowTagEdit} />
-                              <DetailRow label="Original URL" value={item.originalUrl} />
-                              <DetailRow label="Thumbnail URL" value={item.thumbnailUrl} />
+                              <DetailRow label="Original URL" value={item.originalUrl} onCopyUrl={(label, url) => void onCopyUrl(label, url)} />
+                              <DetailRow label="Thumbnail URL" value={item.thumbnailUrl} onCopyUrl={(label, url) => void onCopyUrl(label, url)} />
                               <DetailRow label="Checksum" value={item.checksumSha256} />
                               <DetailRow label="Model version" value={item.modelVersion} />
                               <DetailRow label="Created at" value={item.createdAt} />

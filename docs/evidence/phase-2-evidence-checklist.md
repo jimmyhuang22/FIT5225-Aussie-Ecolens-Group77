@@ -6,7 +6,7 @@ Use this checklist while executing and demoing the Phase 2 Cognito sign-up / con
 
 | Item | Evidence needed | Status |
 |------|-----------------|--------|
-| `ARCH-02` | curl/Postman screenshot of `/api/me` returning `200` with the `user` payload for a valid Cognito access token | Pending |
+| `ARCH-02` | curl/Postman screenshot of `/api/me` returning `200` with the `user` payload for a valid Cognito ID token | Pending |
 | `AUTH-01` | Cognito user pool overview screenshot showing email verification + PreSignUp trigger screenshot showing server-side enforcement of `email`, `given_name`, `family_name` + `apps/web` sign-up form screenshot showing email + first name + last name + password fields + confirmed user record screenshot | Pending |
 | `AUTH-02` | Sign-in success screenshot from `apps/web` (Profile page loaded) + Sign Out screenshot showing redirect to `/sign-in` + Cognito-side evidence that global sign-out revoked the refresh token | Pending |
 | `AUTH-03` | Browser request to `apps/web/profile` while unauthenticated showing redirect to `/sign-in` + direct `GET /api/me` (curl) returning `401` | Pending |
@@ -45,7 +45,7 @@ Use this checklist while executing and demoing the Phase 2 Cognito sign-up / con
 | Health endpoint still works | `GET /health` | `200`, `{ "ok": true, "service": "auth-proof" }` |
 | `/api/me` missing token | `GET /api/me` (no Authorization header) | `401`, `{ "error": "missing_bearer_token" }` |
 | `/api/me` invalid token | `GET /api/me` with `Authorization: Bearer invalid.token.value` | `403`, `{ "error": "invalid_token" }` |
-| `/api/me` valid token | `GET /api/me` with real Cognito access token | `200`, `{ user: { sub, username, email, given_name, family_name, token_use } }` |
+| `/api/me` valid token | `GET /api/me` with real Cognito ID token | `200`, `{ user: { sub, username, email, given_name, family_name, token_use } }` |
 | CORS preflight | Chrome DevTools network tab while loading Profile in `apps/web` | `OPTIONS /api/me` returns `204` with `Access-Control-Allow-Origin: http://localhost:5173` |
 | Cloud Run logs | Cloud Run logs viewer (once deployed) | Request log line for `/api/me` |
 

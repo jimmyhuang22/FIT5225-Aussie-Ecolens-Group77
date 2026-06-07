@@ -12,7 +12,7 @@ Authentication is handled by **AWS Amplify Auth v6** against the AWS Cognito use
 
 - Vite + React 18 + TypeScript
 - `react-router-dom` v6 for routing
-- `aws-amplify` v6 for Cognito sign-up / confirm / sign-in / sign-out and access-token retrieval
+- `aws-amplify` v6 for Cognito sign-up / confirm / sign-in / sign-out and JWT session retrieval. The final AWS API flow sends the Cognito ID token as `Authorization: Bearer ...`.
 
 ## Auth Pattern Choice (Assignment Compliance)
 
@@ -62,7 +62,7 @@ The Vite dev server binds to `http://localhost:5173`, which matches the API serv
 2. Fill email + first name + last name + password.
 3. Receive the 6-digit verification code by email; enter it on `/confirm-sign-up`.
 4. Sign in at `/sign-in`.
-5. Land on `/profile`, which calls `GET /api/me` with the Cognito access token and renders the user object.
+5. Land on `/profile`, which calls `GET /api/me` with the Cognito ID token and renders the user object.
 6. Click "Sign Out". Amplify calls `signOut({ global: true })`, which triggers Cognito global sign-out (refresh tokens revoked server-side) and clears local storage. The user is redirected to `/sign-in`.
 
 ## Demo-Grade Note

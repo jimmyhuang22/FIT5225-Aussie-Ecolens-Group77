@@ -32,7 +32,7 @@ Success:
     "email": "user@example.com",
     "given_name": null,
     "family_name": null,
-    "token_use": "access"
+    "token_use": "id"
   }
 }
 ```

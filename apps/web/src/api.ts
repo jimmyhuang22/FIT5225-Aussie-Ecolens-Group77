@@ -66,6 +66,7 @@ export interface MediaItem {
   ownerSub: string;
   mediaType: "image" | "video";
   storageObject: string;
+  checksumSha256?: string | null;
   status: string;
   tags: string[];
   tagCounts: Record<string, number>;

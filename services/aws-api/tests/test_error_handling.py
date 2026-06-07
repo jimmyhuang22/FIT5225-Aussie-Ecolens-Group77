@@ -313,6 +313,74 @@ class HandlerErrorHandlingTest(unittest.TestCase):
             {"routeKey": ["user-1#felis_catus", "user-2#felis_catus"]},
         )
 
+    def test_bulk_tag_update_succeeds_when_sns_publish_fails(self) -> None:
+        class BulkTagMediaTable:
+            def __init__(self) -> None:
+                self.updated: list[dict[str, Any]] = []
+
+            def query(self, **kwargs: Any) -> dict[str, Any]:
+                if kwargs.get("IndexName") == "ownerSub-createdAt-index":
+                    return {
+                        "Items": [
+                            {
+                                "mediaId": "media-1",
+                                "ownerSub": "user-1",
+                                "tags": [],
+                                "tagCounts": {},
+                                "createdAt": "2026-06-05T00:00:00Z",
+                            }
+                        ]
+                    }
+                if kwargs.get("IndexName") == "visibility-createdAt-index":
+                    return {"Items": []}
+                raise AssertionError("unexpected media query")
+
+            def update_item(self, **kwargs: Any) -> None:
+                self.updated.append(kwargs)
+
+        class FailingSns:
+            def __init__(self) -> None:
+                self.published: list[dict[str, Any]] = []
+
+            def publish(self, **kwargs: Any) -> None:
+                self.published.append(kwargs)
+                raise RuntimeError("sns offline")
+
+        original_media_table = self.app.media_table
+        original_sns = self.app.sns
+        original_topic_arn = self.app.NOTIFICATION_TOPIC_ARN
+        fake_media_table = BulkTagMediaTable()
+        fake_sns = FailingSns()
+        self.app.media_table = fake_media_table
+        self.app.sns = fake_sns
+        self.app.NOTIFICATION_TOPIC_ARN = "arn:aws:sns:ap-southeast-2:123:topic"
+        try:
+            response = self.app.handler(
+                _event(
+                    "POST",
+                    "/media/tags/bulk",
+                    json.dumps(
+                        {
+                            "mediaIds": ["media-1"],
+                            "tags": ["dingo"],
+                            "operation": 1,
+                        }
+                    ),
+                ),
+                None,
+            )
+        finally:
+            self.app.media_table = original_media_table
+            self.app.sns = original_sns
+            self.app.NOTIFICATION_TOPIC_ARN = original_topic_arn
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(len(fake_media_table.updated), 1)
+        self.assertEqual(len(fake_sns.published), 1)
+        updated = json.loads(response["body"])["updated"][0]
+        self.assertEqual(updated["mediaId"], "media-1")
+        self.assertEqual(updated["tags"], ["dingo"])
+
     def test_delete_media_item_hard_deletes_media_record(self) -> None:
         class RecordingS3:
             def __init__(self) -> None:

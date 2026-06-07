@@ -134,6 +134,33 @@ class ProcessorHandlerTest(unittest.TestCase):
             {"macropus_giganteus": 2, "eastern_grey": 2},
         )
 
+    def test_notification_publish_failure_is_best_effort(self) -> None:
+        class FailingSns:
+            def __init__(self) -> None:
+                self.published: list[dict[str, Any]] = []
+
+            def publish(self, **kwargs: Any) -> None:
+                self.published.append(kwargs)
+                raise RuntimeError("sns offline")
+
+        original_sns = self.handler.sns
+        fake_sns = FailingSns()
+        self.handler.sns = fake_sns
+        try:
+            self.handler._notify_matching_subscriptions(
+                {"mediaId": "media-1", "ownerSub": "user-1"},
+                ["dingo"],
+                {"dingo": 1},
+            )
+        finally:
+            self.handler.sns = original_sns
+
+        self.assertEqual(len(fake_sns.published), 1)
+        self.assertEqual(
+            fake_sns.published[0]["MessageAttributes"]["routeKey"]["StringValue"],
+            "user-1#dingo",
+        )
+
     def test_video_thumbnail_falls_back_to_first_frame(self) -> None:
         class ThumbnailS3:
             def __init__(self) -> None:

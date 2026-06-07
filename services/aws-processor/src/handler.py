@@ -526,13 +526,20 @@ def _notify_matching_subscriptions(
     owner = media.get("ownerSub", "unknown user")
     media_id = media.get("mediaId", "unknown media")
     for tag in sorted({tag for tag in tags if tag}):
-        message = {
-            "event": "tag_detected",
-            "mediaId": media_id,
-            "ownerSub": owner,
-            "matchedTags": [tag],
-            "tagCounts": tag_counts,
-        }
+        _publish_tag_detected_notification(str(media_id), str(owner), tag, tag_counts)
+
+
+def _publish_tag_detected_notification(
+    media_id: str, owner: str, tag: str, tag_counts: dict[str, int]
+) -> None:
+    message = {
+        "event": "tag_detected",
+        "mediaId": media_id,
+        "ownerSub": owner,
+        "matchedTags": [tag],
+        "tagCounts": tag_counts,
+    }
+    try:
         sns.publish(
             TopicArn=NOTIFICATION_TOPIC_ARN,
             Subject=f"Aussie EcoLens tag detected: {tag}",
@@ -545,6 +552,12 @@ def _notify_matching_subscriptions(
                 },
                 "mediaId": {"DataType": "String", "StringValue": media_id},
             },
+        )
+    except Exception:
+        LOG.exception(
+            "Failed to publish detection notification for media_id=%s tag=%s",
+            media_id,
+            tag,
         )
 
 

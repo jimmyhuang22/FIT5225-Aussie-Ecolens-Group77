@@ -345,13 +345,20 @@ def _notify_tags_added(
     media_id = str(media.get("mediaId") or "unknown media")
     owner = str(media.get("ownerSub") or "unknown user")
     for tag in added_tags:
-        message = {
-            "event": "tag_added",
-            "mediaId": media_id,
-            "ownerSub": owner,
-            "matchedTags": [tag],
-            "tagCounts": tag_counts,
-        }
+        _publish_tag_added_notification(media_id, owner, tag, tag_counts)
+
+
+def _publish_tag_added_notification(
+    media_id: str, owner: str, tag: str, tag_counts: dict[str, int]
+) -> None:
+    message = {
+        "event": "tag_added",
+        "mediaId": media_id,
+        "ownerSub": owner,
+        "matchedTags": [tag],
+        "tagCounts": tag_counts,
+    }
+    try:
         sns.publish(
             TopicArn=NOTIFICATION_TOPIC_ARN,
             Subject=f"Aussie EcoLens tag added: {tag}",
@@ -364,6 +371,12 @@ def _notify_tags_added(
                 },
                 "mediaId": {"DataType": "String", "StringValue": media_id},
             },
+        )
+    except Exception:
+        LOG.exception(
+            "Failed to publish tag notification for media_id=%s tag=%s",
+            media_id,
+            tag,
         )
 
 

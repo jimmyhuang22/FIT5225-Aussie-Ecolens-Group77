@@ -57,6 +57,10 @@
     @apply border-border;
   }
 
+  html {
+    scrollbar-gutter: stable;
+  }
+
   body {
     @apply m-0 min-h-screen bg-background text-foreground antialiased;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -110,8 +114,80 @@
     @apply w-full space-y-6;
   }
 
+  .workspace-topbar {
+    @apply flex flex-col gap-4 rounded-lg border bg-white/90 p-4 shadow-sm backdrop-blur lg:flex-row lg:items-center lg:justify-between;
+  }
+
+  .workspace-summary {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .summary-pill {
+    @apply inline-flex h-9 items-center gap-2 rounded-md border bg-background px-3 text-sm text-muted-foreground;
+  }
+
+  .summary-pill strong {
+    @apply text-base font-bold text-emerald-950;
+  }
+
+  .workspace-layout {
+    @apply grid gap-5;
+  }
+
+  .tool-panel {
+    @apply w-full;
+  }
+
   .workspace-grid {
     @apply grid grid-cols-1 items-start gap-4 lg:grid-cols-3;
+  }
+
+  .tool-section {
+    @apply space-y-4;
+  }
+
+  .tool-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-4;
+  }
+
+  .tool-grid .tool-section {
+    @apply rounded-md border bg-background/70 p-4;
+  }
+
+  .query-card {
+    @apply flex min-h-72 flex-col;
+  }
+
+  .query-card-header {
+    @apply min-h-20 space-y-1;
+  }
+
+  .query-card-description {
+    @apply text-sm leading-snug text-muted-foreground;
+  }
+
+  .query-card-form {
+    @apply flex flex-1 flex-col gap-4;
+  }
+
+  .query-card-form > button {
+    @apply mt-auto;
+  }
+
+  .query-card-note {
+    @apply text-xs leading-snug text-muted-foreground;
+  }
+
+  .tool-separator {
+    @apply hidden;
+  }
+
+  .tool-section-title {
+    @apply flex items-center gap-2 text-lg font-semibold text-emerald-950;
+  }
+
+  .media-card {
+    @apply rounded-lg border bg-card p-4 shadow-sm transition hover:border-emerald-200;
   }
 
   .media-preview {
@@ -120,5 +196,22 @@
 
   .media-preview img {
     @apply h-full w-full object-cover;
+  }
+
+  .sharing-control {
+    @apply flex max-w-xl flex-col gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .sharing-control > span {
+    @apply font-semibold uppercase tracking-wide;
+  }
+
+  .media-actions {
+    @apply flex w-full shrink-0 flex-col gap-2 sm:w-52 lg:items-stretch;
+  }
+
+  .media-actions > a,
+  .media-actions > button {
+    @apply w-full justify-start;
   }
 }

@@ -7,11 +7,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getCurrentUser } from "aws-amplify/auth";
+import { fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
 
 export interface AuthUser {
   userId: string;
   username: string;
+  email: string | null;
 }
 
 interface AuthState {
@@ -30,7 +31,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const current = await getCurrentUser();
-      setUser({ userId: current.userId, username: current.username });
+      const session = await fetchAuthSession();
+      const email = String(session.tokens?.idToken?.payload.email ?? "").trim() || null;
+      setUser({ userId: current.userId, username: current.username, email });
     } catch {
       setUser(null);
     } finally {

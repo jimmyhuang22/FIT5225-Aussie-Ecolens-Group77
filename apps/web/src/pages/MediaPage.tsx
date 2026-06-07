@@ -258,15 +258,15 @@ function DetailRow({
   const displayValue = typeof value === "boolean" ? (value ? "Yes" : "No") : value || "Not available";
   const urlValue = typeof value === "string" && /^https?:\/\//.test(value) ? value : "";
   return (
-    <div className="grid gap-1 rounded-md border bg-muted/30 p-3 sm:grid-cols-[8rem_1fr]">
-      <dt className="text-xs font-semibold uppercase text-muted-foreground">{label}</dt>
-      <dd className="text-sm text-foreground">
+    <div className="detail-row">
+      <dt>{label}</dt>
+      <dd>
         {urlValue ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="min-w-0 truncate text-muted-foreground" title={urlValue}>
+          <div className="detail-url-row">
+            <span className="detail-url-value" title={urlValue}>
               {shortUrlLabel(urlValue)}
             </span>
-            <span className="flex shrink-0 gap-2">
+            <span className="detail-url-actions">
               <Button asChild variant="outline" size="sm">
                 <a href={urlValue} target="_blank" rel="noreferrer">
                   <ExternalLink /> Open
@@ -1038,8 +1038,8 @@ export function MediaPage() {
 
                 return (
                   <article className="media-card" key={item.mediaId}>
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="flex min-w-0 gap-4">
+                    <div className="media-card-layout">
+                      <div className="media-card-content">
                         <Checkbox
                           aria-label={`Select ${item.mediaId}`}
                           checked={selectedIds.includes(item.mediaId)}
@@ -1054,7 +1054,7 @@ export function MediaPage() {
                             <span>{item.mediaType}</span>
                           )}
                         </div>
-                        <div className="min-w-0 space-y-2">
+                        <div className="media-card-main">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-semibold text-emerald-950">{shortId(item.mediaId)}</h3>
                             <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
@@ -1080,11 +1080,11 @@ export function MediaPage() {
                               ))
                             )}
                           </div>
-                          <details className="group rounded-md border bg-background/70 p-3">
+                          <details className="media-details">
                             <summary className="cursor-pointer text-sm font-semibold text-emerald-950">
                               Details
                             </summary>
-                            <dl className="mt-3 grid gap-2">
+                            <dl>
                               <DetailRow label="Owner" value={ownerDisplay} />
                               <DetailRow label="Visibility" value={itemVisibility === "shared" ? "Shared" : "Private"} />
                               <DetailRow label="Allow tag edit" value={item.allowTagEdit} />

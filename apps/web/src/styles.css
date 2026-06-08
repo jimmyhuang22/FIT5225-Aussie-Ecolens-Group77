@@ -59,6 +59,7 @@
 
   html {
     scrollbar-gutter: stable both-edges;
+    overflow-y: scroll;
   }
 
   body {
@@ -69,6 +70,8 @@
 
   body[data-scroll-locked] {
     margin-right: 0 !important;
+    padding-right: 0 !important;
+    overflow-y: scroll !important;
   }
 
   a {
@@ -194,6 +197,18 @@
     @apply rounded-lg border bg-card p-4 shadow-sm transition hover:border-emerald-200;
   }
 
+  .media-card-layout {
+    @apply grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_13rem] lg:items-start;
+  }
+
+  .media-card-content {
+    @apply flex min-w-0 gap-4;
+  }
+
+  .media-card-main {
+    @apply min-w-0 flex-1 space-y-2;
+  }
+
   .media-preview {
     @apply grid size-24 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted text-xs font-bold uppercase text-muted-foreground;
   }
@@ -211,11 +226,43 @@
   }
 
   .media-actions {
-    @apply flex w-full shrink-0 flex-col gap-2 sm:w-52 lg:items-stretch;
+    @apply flex w-full min-w-0 shrink-0 flex-col gap-2 sm:w-52 lg:w-full lg:items-stretch;
   }
 
   .media-actions > a,
   .media-actions > button {
-    @apply w-full justify-start;
+    @apply w-full justify-center whitespace-nowrap;
+  }
+
+  .media-details {
+    @apply max-w-full overflow-hidden rounded-md border bg-background/70 p-3;
+  }
+
+  .media-details dl {
+    @apply mt-3 grid gap-2;
+  }
+
+  .detail-row {
+    @apply grid min-w-0 gap-2 rounded-md border bg-muted/30 p-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center;
+  }
+
+  .detail-row dt {
+    @apply text-xs font-semibold uppercase text-muted-foreground;
+  }
+
+  .detail-row dd {
+    @apply min-w-0 text-sm text-foreground;
+  }
+
+  .detail-url-row {
+    @apply grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center;
+  }
+
+  .detail-url-value {
+    @apply min-w-0 truncate text-muted-foreground;
+  }
+
+  .detail-url-actions {
+    @apply flex shrink-0 flex-wrap gap-2 sm:justify-end;
   }
 }

@@ -532,18 +532,16 @@ def _notify_matching_subscriptions(
 def _publish_tag_detected_notification(
     media_id: str, owner: str, tag: str, tag_counts: dict[str, int]
 ) -> None:
-    message = {
-        "event": "tag_detected",
-        "mediaId": media_id,
-        "ownerSub": owner,
-        "matchedTags": [tag],
-        "tagCounts": tag_counts,
-    }
     try:
         sns.publish(
             TopicArn=NOTIFICATION_TOPIC_ARN,
-            Subject=f"Aussie EcoLens tag detected: {tag}",
-            Message=json.dumps(message, indent=2),
+            Subject=f"Aussie EcoLens matched your tag: {tag}",
+            Message=_tag_notification_message(
+                "A media item you follow finished processing with a matching tag.",
+                media_id,
+                tag,
+                tag_counts,
+            ),
             MessageAttributes={
                 "ownerSub": {"DataType": "String", "StringValue": owner},
                 "routeKey": {
@@ -559,6 +557,37 @@ def _publish_tag_detected_notification(
             media_id,
             tag,
         )
+
+
+def _tag_notification_message(
+    summary: str, media_id: str, matched_tag: str, tag_counts: dict[str, int]
+) -> str:
+    tag_lines = _tag_count_message_lines(tag_counts)
+    return "\n".join(
+        [
+            "Hi,",
+            "",
+            summary,
+            "",
+            f"Matched tag: {matched_tag}",
+            f"Media ID: {media_id}",
+            "",
+            "Current tags:",
+            *tag_lines,
+            "",
+            "You are receiving this because you subscribed to this tag in Aussie EcoLens.",
+            "You can manage your subscriptions from the Notifications tab.",
+        ]
+    )
+
+
+def _tag_count_message_lines(tag_counts: dict[str, int]) -> list[str]:
+    if not tag_counts:
+        return ["- No tags recorded yet"]
+    return [
+        f"- {tag} x{int(count)}"
+        for tag, count in sorted(tag_counts.items())
+    ]
 
 
 def _now() -> str:

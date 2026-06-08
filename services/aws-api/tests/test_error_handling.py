@@ -377,6 +377,16 @@ class HandlerErrorHandlingTest(unittest.TestCase):
         self.assertEqual(response["statusCode"], 200)
         self.assertEqual(len(fake_media_table.updated), 1)
         self.assertEqual(len(fake_sns.published), 1)
+        published = fake_sns.published[0]
+        self.assertEqual(
+            published["Subject"],
+            "Aussie EcoLens matched your tag: dingo",
+        )
+        self.assertFalse(published["Message"].lstrip().startswith("{"))
+        self.assertIn("Matched tag: dingo", published["Message"])
+        self.assertIn("Media ID: media-1", published["Message"])
+        self.assertIn("- dingo x1", published["Message"])
+        self.assertNotIn('"ownerSub"', published["Message"])
         updated = json.loads(response["body"])["updated"][0]
         self.assertEqual(updated["mediaId"], "media-1")
         self.assertEqual(updated["tags"], ["dingo"])

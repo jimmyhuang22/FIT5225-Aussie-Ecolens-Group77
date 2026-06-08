@@ -156,8 +156,18 @@ class ProcessorHandlerTest(unittest.TestCase):
             self.handler.sns = original_sns
 
         self.assertEqual(len(fake_sns.published), 1)
+        published = fake_sns.published[0]
         self.assertEqual(
-            fake_sns.published[0]["MessageAttributes"]["routeKey"]["StringValue"],
+            published["Subject"],
+            "Aussie EcoLens matched your tag: dingo",
+        )
+        self.assertFalse(published["Message"].lstrip().startswith("{"))
+        self.assertIn("Matched tag: dingo", published["Message"])
+        self.assertIn("Media ID: media-1", published["Message"])
+        self.assertIn("- dingo x1", published["Message"])
+        self.assertNotIn('"ownerSub"', published["Message"])
+        self.assertEqual(
+            published["MessageAttributes"]["routeKey"]["StringValue"],
             "user-1#dingo",
         )
 

@@ -66,6 +66,9 @@ with `X-Inference-Api-Key`.
   visible `processingError` instead of being silently truncated.
 - Fresh presigned media URLs on API reads, so expired thumbnails recover after a
   refresh.
+- Owner-controlled sharing. Media defaults to private; owners can mark items as
+  shared, and `allowTagEdit=true` lets other registered users edit tags while
+  delete and sharing-setting changes remain owner-only.
 - Single-tag search and multi-tag AND/count search.
 - Query-by-file for images using a temporary query image that is not persisted as
   media.
@@ -78,7 +81,7 @@ with `X-Inference-Api-Key`.
 - Processor SNS publishing by matched owner/tag route, so a shared topic only
   delivers to confirmed subscriptions for the same signed-in user and tag.
 - UI coverage for auth, upload, media status, processing errors, tag search,
-  query-by-file, bulk tag editing, delete, and subscriptions.
+  query-by-file, sharing controls, bulk tag editing, delete, and subscriptions.
 
 ### Remaining Evidence And Hardening
 
@@ -162,7 +165,8 @@ Open:
 http://localhost:5173
 ```
 
-Build:
+Build. Vite injects Cognito and API settings at build time, so make sure
+`apps/web/.env` exists with the values above before running this command:
 
 ```powershell
 npm run web:build
@@ -210,9 +214,15 @@ The current public frontend is hosted from Google Cloud Storage:
 https://storage.googleapis.com/aussie-ecolens-web-arched-vigil-490915-f7/index.html#/media
 ```
 
-Build and upload from this workspace:
+Build and upload from this workspace. Vite environment variables are build-time
+values; if `apps/web/.env` is missing, pass the deployed values inline before
+building.
 
 ```powershell
+$env:VITE_COGNITO_REGION="ap-southeast-2"
+$env:VITE_COGNITO_USER_POOL_ID="ap-southeast-2_EfZfn63CN"
+$env:VITE_COGNITO_APP_CLIENT_ID="5t6tjbcvts42tsork8ufc1ear7"
+$env:VITE_API_BASE_URL="https://vwalnc3mxc.execute-api.ap-southeast-2.amazonaws.com/Prod"
 npm run web:build
 
 wsl bash
@@ -245,9 +255,10 @@ Current deployed auth posture:
 - `/inference` is protected at the application layer with
   `INFERENCE_AUTH_MODE=api_key`.
 - AWS sends the shared key through `X-Inference-Api-Key`.
-- Deployed environments can load the AWS-side key from SSM Parameter Store via
-  `InferenceApiKeyParameterName`, and the Cloud Run deploy script can mount the
-  service-side key from Secret Manager via `INFERENCE_API_KEY_SECRET`.
+- The current demo deployment uses API-key mode. The recommended hardening path
+  is to load the AWS-side key from SSM Parameter Store via
+  `InferenceApiKeyParameterName` and mount the Cloud Run key from Secret Manager
+  via `INFERENCE_API_KEY_SECRET`.
 - `INFERENCE_AUTH_MODE=open` is local-development only.
 
 Full guide:
@@ -269,6 +280,7 @@ POST   /media/upload-url
 POST   /media/{mediaId}/complete
 GET    /media
 GET    /media/{mediaId}
+PATCH  /media/{mediaId}/sharing
 POST   /media/query/tags
 POST   /media/query/file
 POST   /media/query/thumbnail

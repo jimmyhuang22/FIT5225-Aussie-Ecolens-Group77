@@ -187,6 +187,12 @@ function bulkTagToastDescription(items: MediaItem[], tags: string[], operation: 
   return `Updated ${fileCount(items.length)}. ${summaries.join(" ")}`;
 }
 
+function bulkTagUpdateHasIgnoredItems(items: MediaItem[], tags: string[], operation: "1" | "0"): boolean {
+  if (operation === "1") return false;
+  const normalizedTags = [...new Set(tags.map(normalizeTag).filter(Boolean))];
+  return normalizedTags.some((tag) => items.some((item) => !mediaHasTag(item, tag)));
+}
+
 function statusVariant(status: string): "success" | "warning" | "destructive" | "secondary" {
   if (status === "processed") return "success";
   if (status === "failed") return "destructive";
@@ -421,7 +427,7 @@ export function MediaPage() {
       if (upload.duplicate) {
         setFile(null);
         setNotice(null);
-        toast.success("Duplicate detected", { description: "Existing media record was reused." });
+        toast.warning("Duplicate detected", { description: "Existing media record was reused." });
         await refresh();
         return;
       }
@@ -545,6 +551,7 @@ export function MediaPage() {
       .map((item) => item.originalUrl || item.thumbnailUrl || item.storageObject)
       .filter((url): url is string => Boolean(url));
     const toastDescription = bulkTagToastDescription(selectedItems, tags, bulkOperation);
+    const hasIgnoredItems = bulkTagUpdateHasIgnoredItems(selectedItems, tags, bulkOperation);
     setNotice({ tone: "info", text: "Updating tags..." });
     try {
       const updated = await bulkUpdateTags(
@@ -556,9 +563,11 @@ export function MediaPage() {
       const updatedById = new Map(updated.map((item) => [item.mediaId, item]));
       setItems((previous) => previous.map((item) => updatedById.get(item.mediaId) ?? item));
       setNotice(null);
-      toast.success("Tags updated", {
-        description: toastDescription,
-      });
+      if (hasIgnoredItems) {
+        toast.warning("Tags updated", { description: toastDescription });
+      } else {
+        toast.success("Tags updated", { description: toastDescription });
+      }
     } catch (err) {
       const message = errorMessage(err);
       setNotice({ tone: "error", text: `Tag update failed: ${message}` });

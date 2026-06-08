@@ -131,6 +131,27 @@ def _current_user(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _owner_profile_from_user(user: dict[str, Any]) -> dict[str, Any]:
+    email = _clean_optional_string(user.get("email"))
+    given_name = _clean_optional_string(user.get("given_name"))
+    family_name = _clean_optional_string(user.get("family_name"))
+    username = _clean_optional_string(user.get("username"))
+    display_name = " ".join(
+        part for part in (given_name, family_name) if part
+    ).strip() or email or username
+    return {
+        "ownerEmail": email,
+        "ownerGivenName": given_name,
+        "ownerFamilyName": family_name,
+        "ownerDisplayName": display_name,
+    }
+
+
+def _clean_optional_string(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
 def _owner_sub(event: dict[str, Any]) -> str:
     sub = _current_user(event).get("sub")
     if not sub:
@@ -155,7 +176,11 @@ def _epoch_now() -> int:
 
 
 def _create_upload_url(event: dict[str, Any]) -> dict[str, Any]:
-    owner_sub = _owner_sub(event)
+    user = _current_user(event)
+    owner_sub = str(user.get("sub") or "").strip()
+    if not owner_sub:
+        raise PermissionError()
+    owner_profile = _owner_profile_from_user(user)
     body = _body(event)
     filename = str(body.get("filename") or "").strip()
     content_type = _normalize_content_type(body.get("contentType"))
@@ -179,6 +204,7 @@ def _create_upload_url(event: dict[str, Any]) -> dict[str, Any]:
         item = {
             "mediaId": media_id,
             "ownerSub": owner_sub,
+            **owner_profile,
             "originalUrl": None,
             "thumbnailUrl": None,
             "mediaType": media_type,
@@ -221,6 +247,7 @@ def _create_upload_url(event: dict[str, Any]) -> dict[str, Any]:
 
 def _complete_upload(event: dict[str, Any], media_id: str) -> dict[str, Any]:
     item = _load_owned_media(event, media_id)
+    owner_profile = _owner_profile_from_user(_current_user(event))
     if item.get("status") in ("processing", "processed", "failed", "deleted"):
         _sync_dedup_status_for_media(item, str(item.get("status") or "uploaded"))
         return _response(200, {"media": _json_safe(_with_fresh_media_urls(item))})
@@ -228,7 +255,11 @@ def _complete_upload(event: dict[str, Any], media_id: str) -> dict[str, Any]:
     try:
         media_table.update_item(
             Key={"mediaId": media_id},
-            UpdateExpression="SET #s = :status, updatedAt = :updatedAt",
+            UpdateExpression=(
+                "SET #s = :status, updatedAt = :updatedAt, "
+                "ownerEmail = :ownerEmail, ownerGivenName = :ownerGivenName, "
+                "ownerFamilyName = :ownerFamilyName, ownerDisplayName = :ownerDisplayName"
+            ),
             ConditionExpression="#s = :issued OR #s = :uploaded",
             ExpressionAttributeNames={"#s": "status"},
             ExpressionAttributeValues={
@@ -236,10 +267,15 @@ def _complete_upload(event: dict[str, Any], media_id: str) -> dict[str, Any]:
                 ":updatedAt": now,
                 ":issued": "upload_url_issued",
                 ":uploaded": "uploaded",
+                ":ownerEmail": owner_profile.get("ownerEmail"),
+                ":ownerGivenName": owner_profile.get("ownerGivenName"),
+                ":ownerFamilyName": owner_profile.get("ownerFamilyName"),
+                ":ownerDisplayName": owner_profile.get("ownerDisplayName"),
             },
         )
         item["status"] = "uploaded"
         item["updatedAt"] = now
+        item.update(owner_profile)
         _sync_dedup_status_for_media(item, "uploaded")
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
@@ -414,6 +450,7 @@ def _query_original_by_thumbnail(event: dict[str, Any]) -> dict[str, Any]:
 def _update_media_sharing(event: dict[str, Any], media_id: str) -> dict[str, Any]:
     owner_sub = _owner_sub(event)
     item = _load_owned_media(event, media_id)
+    owner_profile = _owner_profile_from_user(_current_user(event))
     body = _body(event)
     visibility = _normalize_visibility(body.get("visibility"))
     allow_tag_edit = _parse_bool(body.get("allowTagEdit", False))
@@ -424,7 +461,9 @@ def _update_media_sharing(event: dict[str, Any], media_id: str) -> dict[str, Any
         Key={"mediaId": media_id},
         UpdateExpression=(
             "SET visibility = :visibility, allowTagEdit = :allowTagEdit, "
-            "updatedAt = :updatedAt"
+            "updatedAt = :updatedAt, ownerEmail = :ownerEmail, "
+            "ownerGivenName = :ownerGivenName, ownerFamilyName = :ownerFamilyName, "
+            "ownerDisplayName = :ownerDisplayName"
         ),
         ConditionExpression="ownerSub = :ownerSub",
         ExpressionAttributeValues={
@@ -432,12 +471,17 @@ def _update_media_sharing(event: dict[str, Any], media_id: str) -> dict[str, Any
             ":allowTagEdit": allow_tag_edit,
             ":updatedAt": now,
             ":ownerSub": owner_sub,
+            ":ownerEmail": owner_profile.get("ownerEmail"),
+            ":ownerGivenName": owner_profile.get("ownerGivenName"),
+            ":ownerFamilyName": owner_profile.get("ownerFamilyName"),
+            ":ownerDisplayName": owner_profile.get("ownerDisplayName"),
         },
     )
     refreshed = dict(item)
     refreshed["visibility"] = visibility
     refreshed["allowTagEdit"] = allow_tag_edit
     refreshed["updatedAt"] = now
+    refreshed.update(owner_profile)
     return _response(200, {"media": _json_safe(_with_fresh_media_urls(refreshed))})
 
 

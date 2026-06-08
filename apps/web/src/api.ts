@@ -64,6 +64,10 @@ export interface UploadUrlResponse {
 export interface MediaItem {
   mediaId: string;
   ownerSub: string;
+  ownerEmail?: string | null;
+  ownerGivenName?: string | null;
+  ownerFamilyName?: string | null;
+  ownerDisplayName?: string | null;
   mediaType: "image" | "video";
   storageObject: string;
   checksumSha256?: string | null;

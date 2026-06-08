@@ -214,6 +214,13 @@ function isMediaOwner(item: MediaItem, userId?: string): boolean {
   return Boolean(userId && item.ownerSub === userId);
 }
 
+function mediaOwnerDisplay(item: MediaItem, fallback: string): string {
+  const nameParts = [item.ownerGivenName, item.ownerFamilyName]
+    .map((part) => part?.trim())
+    .filter(Boolean);
+  return item.ownerDisplayName?.trim() || nameParts.join(" ") || item.ownerEmail?.trim() || fallback;
+}
+
 function canEditMediaTags(item: MediaItem, userId?: string): boolean {
   return isMediaOwner(item, userId) || (mediaVisibility(item) === "shared" && item.allowTagEdit);
 }
@@ -1032,9 +1039,12 @@ export function MediaPage() {
                 const itemCanEditTags = canEditMediaTags(item, user?.userId);
                 const itemCanDelete = canDeleteMedia(item, user?.userId);
                 const itemVisibility = mediaVisibility(item);
-                const ownerDisplay = ownedByCurrentUser
-                  ? user?.displayName || user?.email || "You"
-                  : `Shared user (${shortId(item.ownerSub)})`;
+                const ownerDisplay = mediaOwnerDisplay(
+                  item,
+                  ownedByCurrentUser
+                    ? user?.displayName || user?.email || "You"
+                    : `Shared user (${shortId(item.ownerSub)})`,
+                );
 
                 return (
                   <article className="media-card" key={item.mediaId}>
